@@ -11,6 +11,11 @@ enum TradeType {
   SELL
 }
 
+enum ClubType {
+  DEPARTMENTAL
+  CORE
+}
+
 model User {
   user_id         String   @id @default(uuid()) @db.Uuid
   full_name       String
@@ -26,6 +31,7 @@ model User {
 model Club {
   club_id     Int      @id @default(autoincrement())
   club_name   String   @unique
+  club_type   ClubType
   department  String?
   created_at  DateTime @default(now())
 
