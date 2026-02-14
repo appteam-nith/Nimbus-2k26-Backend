@@ -1,18 +1,9 @@
-
-const { fetchEventsByDate } = require('../services/event/eventServices');
-const { sendResponse } = require('../utils/response.util');
-
-// Under Construction
+import { fetchEventsByDate } from '../services/event/eventServices.js';
+import { sendResponse } from '../utils/response.util.js';
 
 const getEventsByDate = async (req, res, next) => {
   try {
-    const { date } = req.query;
-
-    if (!date) {
-      return sendResponse(res, 400, 'Date query parameter is required');
-    }
-
-    const events = await fetchEventsByDate(date);
+    const events = await fetchEventsByDate(req.query.date);
 
     return sendResponse(
       res,
@@ -26,3 +17,5 @@ const getEventsByDate = async (req, res, next) => {
     next(err);
   }
 };
+
+export { getEventsByDate };
