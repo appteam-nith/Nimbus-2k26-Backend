@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Club" ALTER COLUMN "club_type" SET DEFAULT 'DEPARTMENTAL';
