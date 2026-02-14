@@ -1,4 +1,4 @@
-import { sendResponse } from '../utils/response.util.js';
+import { sendResponse } from '../utils/response.js';
 
 const validateDate = (req, res, next) => {
     const { date } = req.query;

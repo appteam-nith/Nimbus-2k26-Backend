@@ -1,5 +1,5 @@
 import { fetchEventsByDate } from '../services/event/eventServices.js';
-import { sendResponse } from '../utils/response.util.js';
+import { sendResponse } from '../utils/response.js';
 
 const getEventsByDate = async (req, res, next) => {
   try {
