@@ -11,6 +11,16 @@ const findUserByEmail = async (email) => {
   return prisma.user.findUnique({ where: { email } });
 };
 
+const findUserByGoogleId = async (googleId) => {
+  return prisma.user.findUnique({ where: { google_id: googleId } });
+};
+
+const createGoogleUser = async (name, email, googleId) => {
+  return prisma.user.create({
+    data: { full_name: name, email, google_id: googleId },
+  });
+};
+
 /**
  * Upsert a user by their Clerk ID.
  * Called from POST /api/users/sync after Clerk verifies the session.
@@ -55,6 +65,8 @@ const updateUserBalance = async (userId, money) => {
 export {
   createUser,
   findUserByEmail,
+  findUserByGoogleId,
+  createGoogleUser,
   upsertClerkUser,
   findUserByClerkId,
   findUserById,
