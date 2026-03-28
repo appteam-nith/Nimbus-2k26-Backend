@@ -1,25 +1,10 @@
-import jwt from "jsonwebtoken";
+import { requireAuth, getAuth } from "@clerk/express";
 
 /**
- * Middleware to authenticate requests using a Bearer JWT token.
- * Attaches the decoded payload (userId) to req.user on success.
+ * Drop-in replacement for the old JWT `protect` middleware.
+ * Uses Clerk's requireAuth() — automatically verifies the session token
+ * from the `Authorization: Bearer <clerk_session_token>` header.
+ *
+ * Unauthenticated requests receive a 401 response automatically.
  */
-const protect = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Not authorised, no token provided" });
-  }
-
-  const token = authHeader.split(" ")[1];
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // { userId: "..." }
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: "Not authorised, token is invalid or expired" });
-  }
-};
-
-export default protect;
+export { requireAuth as default, getAuth };

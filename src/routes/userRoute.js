@@ -1,26 +1,21 @@
 import { Router } from "express";
-import { registerUser, loginUser, getUserProfile, updateUserProfile, updateBalance } from "../controllers/usercontroller.js";
+import { syncClerkUser, getUserProfile, updateUserProfile, updateBalance } from "../controllers/usercontroller.js";
 import { getEventsByDate } from "../controllers/eventControllers.js";
-import { googleAuth } from "../controllers/googleAuthController.js";
-import { forgotPassword, resetPassword } from "../controllers/passwordResetController.js";
 import validateDate from "../middlewares/valDateMiddleware.js";
 import protect from "../middlewares/authMiddleware.js";
 
 const router = Router();
 
-// Auth Routes
-router.post('/register', registerUser);
-router.post('/login', loginUser);
-router.post('/auth/google', googleAuth);
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
+// ─── Clerk Sync ──────────────────────────────────────────────────────────────
+// Must be called by the client once after login to create/update DB record.
+router.post("/sync", protect(), syncClerkUser);
 
-// User Profile Routes (protected)
-router.get('/profile', protect, getUserProfile);
-router.put('/profile', protect, updateUserProfile);
-router.put('/balance', protect, updateBalance);
+// ─── User Profile (protected) ─────────────────────────────────────────────────
+router.get("/profile", protect(), getUserProfile);
+router.put("/profile", protect(), updateUserProfile);
+router.put("/balance", protect(), updateBalance);
 
-// Event Timeline Routes (Under construction)
-router.get('/events', validateDate, getEventsByDate);
+// ─── Event Timeline ───────────────────────────────────────────────────────────
+router.get("/events", validateDate, getEventsByDate);
 
-export default router;
+export default router;

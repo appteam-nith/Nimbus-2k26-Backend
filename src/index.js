@@ -3,6 +3,7 @@ dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
+import { clerkMiddleware } from '@clerk/express';
 import UserRoutes from "./routes/userRoute.js";
 import CoreTeamRoutes from "./routes/coreTeamRoute.js";
 import EventRoutes from "./routes/eventRoute.js";
@@ -20,6 +21,9 @@ app.use(cors({
 
 // Middleware to parse JSON bodies
 app.use(express.json());
+
+// Clerk — populates auth context on every request
+app.use(clerkMiddleware());
 
 app.get('/', (req, res) => {
   res.send('Hello, Nimbus 2k26 Backend!');

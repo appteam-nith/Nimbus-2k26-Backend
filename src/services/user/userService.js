@@ -1,31 +1,27 @@
 import prisma from "../../config/prisma.js";
-import bcrypt from "bcrypt";
 
-const createUser = async (name, email, hashedPassword) => {
-  return prisma.user.create({
-    data: { full_name: name, email, password: hashedPassword },
-    select: { user_id: true, full_name: true, email: true },
+/**
+ * Upsert a user by their Clerk ID.
+ * Called from POST /api/users/sync after Clerk verifies the session.
+ * Creates the user on first login, updates name/email on subsequent calls.
+ */
+const upsertClerkUser = async (clerkId, name, email) => {
+  return prisma.user.upsert({
+    where: { clerk_id: clerkId },
+    update: { full_name: name, email },
+    create: { clerk_id: clerkId, full_name: name, email },
+    select: { user_id: true, clerk_id: true, full_name: true, email: true, virtual_balance: true },
   });
 };
 
-const findUserByEmail = async (email) => {
-  return prisma.user.findUnique({ where: { email } });
-};
-
-const findUserByGoogleId = async (googleId) => {
-  return prisma.user.findUnique({ where: { google_id: googleId } });
-};
-
-const createGoogleUser = async (name, email, googleId) => {
-  return prisma.user.create({
-    data: { full_name: name, email, google_id: googleId },
-  });
+const findUserByClerkId = async (clerkId) => {
+  return prisma.user.findUnique({ where: { clerk_id: clerkId } });
 };
 
 const findUserById = async (userId) => {
   return prisma.user.findUnique({
     where: { user_id: userId },
-    select: { user_id: true, full_name: true, email: true, virtual_balance: true, created_at: true },
+    select: { user_id: true, clerk_id: true, full_name: true, email: true, virtual_balance: true, created_at: true },
   });
 };
 
@@ -46,10 +42,8 @@ const updateUserBalance = async (userId, money) => {
 };
 
 export {
-  createUser,
-  findUserByEmail,
-  findUserByGoogleId,
-  createGoogleUser,
+  upsertClerkUser,
+  findUserByClerkId,
   findUserById,
   updateUser,
   updateUserBalance,
