@@ -1,3 +1,5 @@
+import nodemailer from "nodemailer";
+
 /**
  * Email service using authkey.io Transactional Email API.
  * Docs: https://authkey.io/docs/
@@ -33,6 +35,19 @@ const callAuthkeyApi = async (params) => {
   return data;
 };
 
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    // Using Brevo SMTP Relay by default, or relying on generic SMTP config
+    host: process.env.SMTP_HOST || "smtp-relay.brevo.com",
+    port: process.env.SMTP_PORT || 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+};
+
 /**
  * Sends a password reset email via authkey.io.
  *
@@ -62,4 +77,36 @@ const sendPasswordResetEmail = async (toEmail, resetToken) => {
   });
 };
 
-export { sendPasswordResetEmail };
+/**
+ * Sends a 4-digit OTP to the user for registration
+ * @param {string} toEmail 
+ * @param {string} otp 
+ */
+const sendOtpEmail = async (toEmail, otp) => {
+  const transporter = createTransporter();
+
+  const mailOptions = {
+    from: `"Nimbus 2k26" <${process.env.EMAIL_USER}>`,
+    to: toEmail,
+    subject: "Your Registration OTP — Nimbus 2k26",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #333;">Welcome to Nimbus 2k26!</h2>
+        <p>Hi there,</p>
+        <p>You recently tried to register an account with us. To verify your email, please enter the following 4-digit OTP code in the app:</p>
+        <div style="text-align: center; margin: 32px 0;">
+          <span style="display: inline-block; letter-spacing: 6px; padding: 16px 32px; background-color: #f3f4f6; color: #111827; border-radius: 6px; font-size: 32px; font-weight: bold;">
+            ${otp}
+          </span>
+        </div>
+        <p>This code will expire in <strong>10 minutes</strong>.</p>
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;" />
+        <p style="font-size: 13px; color: #999;">If you did not request this OTP, please ignore this email. No account will be created.</p>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+};
+
+export { sendPasswordResetEmail, sendOtpEmail };

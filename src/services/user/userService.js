@@ -1,5 +1,16 @@
 import prisma from "../../config/prisma.js";
 
+const createUser = async (name, email, password) => {
+  return prisma.user.create({
+    data: { full_name: name, email, password },
+    select: { user_id: true, full_name: true, email: true, virtual_balance: true },
+  });
+};
+
+const findUserByEmail = async (email) => {
+  return prisma.user.findUnique({ where: { email } });
+};
+
 /**
  * Upsert a user by their Clerk ID.
  * Called from POST /api/users/sync after Clerk verifies the session.
@@ -42,6 +53,8 @@ const updateUserBalance = async (userId, money) => {
 };
 
 export {
+  createUser,
+  findUserByEmail,
   upsertClerkUser,
   findUserByClerkId,
   findUserById,
