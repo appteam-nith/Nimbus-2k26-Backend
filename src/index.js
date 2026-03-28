@@ -5,6 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import UserRoutes from "./routes/userRoute.js";
 import CoreTeamRoutes from "./routes/coreTeamRoute.js";
+import EventRoutes from "./routes/eventRoute.js";
 import errorHandler from "./middlewares/errorMiddleware.js";
 
 const app = express();
@@ -26,6 +27,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/users', UserRoutes);
 app.use('/api/coreteam', CoreTeamRoutes);
+app.use('/api/events', EventRoutes);
 
 // Global error handler — must be last
 app.use(errorHandler);
