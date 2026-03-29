@@ -7,17 +7,40 @@ import prisma from "../../config/prisma.js";
  * Called every time a Google Sign-In succeeds.
  */
 const upsertGoogleUser = async (googleId, name, email) => {
-  return prisma.user.upsert({
+  // First, try to find an existing user by google_id
+  let user = await prisma.user.findUnique({
     where: { google_id: googleId },
-    update: { full_name: name, email },
-    create: { google_id: googleId, full_name: name, email },
-    select: {
-      user_id: true,
-      google_id: true,
-      full_name: true,
-      email: true,
-      virtual_balance: true,
-    },
+    select: { user_id: true, google_id: true, full_name: true, email: true, virtual_balance: true },
+  });
+
+  if (user) {
+    // Update name/email if they changed
+    return prisma.user.update({
+      where: { google_id: googleId },
+      data: { full_name: name, email },
+      select: { user_id: true, google_id: true, full_name: true, email: true, virtual_balance: true },
+    });
+  }
+
+  // No user found by google_id — check if this email already exists (e.g. old Clerk user)
+  const existingByEmail = await prisma.user.findUnique({
+    where: { email },
+    select: { user_id: true },
+  });
+
+  if (existingByEmail) {
+    // Link the google_id to this existing account
+    return prisma.user.update({
+      where: { email },
+      data: { google_id: googleId, full_name: name },
+      select: { user_id: true, google_id: true, full_name: true, email: true, virtual_balance: true },
+    });
+  }
+
+  // Brand new user — create fresh
+  return prisma.user.create({
+    data: { google_id: googleId, full_name: name, email },
+    select: { user_id: true, google_id: true, full_name: true, email: true, virtual_balance: true },
   });
 };
 
