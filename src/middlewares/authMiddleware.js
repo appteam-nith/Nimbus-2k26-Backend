@@ -3,41 +3,50 @@ import jwt from "jsonwebtoken";
 
 /**
  * Hybrid Auth Middleware
- * Supports BOTH @clerk/express Google Sessions AND custom Email/JWT Sessions
+ * Supports BOTH @clerk/express Clerk Sessions AND custom Email/JWT Sessions.
+ *
+ * Flow:
+ *  1. If clerkMiddleware() has already verified a Clerk session → use it.
+ *  2. Otherwise fall back to validating a custom JWT Bearer token.
+ *  3. Reject with 401 if neither is present / valid.
  */
 const protect = (req, res, next) => {
+  // ── 1. Clerk session check ─────────────────────────────────────────────
   try {
-    // 1. Check if Clerk's middleware populated auth
     const clerkAuth = getAuth(req);
     if (clerkAuth && clerkAuth.userId) {
-      // Valid Clerk Session
       req.auth = clerkAuth;
       return next();
     }
-  } catch (error) {
-    // Clerk error, gracefully fallback to JWT
+  } catch (_clerkErr) {
+    // Clerk threw (e.g. malformed token / not a Clerk session) — fall through
   }
 
-  // 2. Check for Custom JWT Token
-  let token;
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith("Bearer")
-  ) {
+  // ── 2. Custom JWT check ────────────────────────────────────────────────
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ error: "Not authorized, no token present" });
+    }
+
     try {
-      token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      
-      // Mimic structure so controllers know it's a generic user ID
       req.user = { userId: decoded.userId };
       return next();
-    } catch (error) {
-      return res.status(401).json({ error: "Not authorized, token failed" });
+    } catch (jwtErr) {
+      // Covers JsonWebTokenError, TokenExpiredError, NotBeforeError, etc.
+      const msg =
+        jwtErr.name === "TokenExpiredError"
+          ? "Not authorized, token expired"
+          : "Not authorized, token failed";
+      return res.status(401).json({ error: msg });
     }
   }
 
+  // ── 3. No credentials at all ───────────────────────────────────────────
   return res.status(401).json({ error: "Not authorized, no token present" });
 };
 
-// Export `protect` as default and keep `getAuth` available for controllers
 export { protect as default, getAuth };

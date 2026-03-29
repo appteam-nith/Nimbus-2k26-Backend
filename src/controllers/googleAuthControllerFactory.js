@@ -85,7 +85,16 @@ const createGoogleAuthController = ({
       });
     } catch (error) {
       console.error("Google auth error:", error.message);
-      return res.status(500).json({ error: "Google authentication failed" });
+      // Token verification errors should be 401, not 500
+      const isTokenError =
+        error.message?.includes("Invalid token") ||
+        error.message?.includes("Token used too late") ||
+        error.message?.includes("Wrong number of segments") ||
+        error.message?.includes("audience") ||
+        error.message?.includes("signature");
+      return res.status(isTokenError ? 401 : 500).json({
+        error: isTokenError ? "Invalid or expired Google ID token" : "Google authentication failed",
+      });
     }
   };
 };

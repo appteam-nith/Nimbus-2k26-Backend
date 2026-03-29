@@ -9,7 +9,6 @@ import {
   updateBalance 
 } from "../controllers/usercontroller.js";
 import { getEventsByDate } from "../controllers/eventControllers.js";
-import { googleAuth } from "../controllers/googleAuthController.js";
 import validateDate from "../middlewares/valDateMiddleware.js";
 import protect from "../middlewares/authMiddleware.js";
 
@@ -23,7 +22,16 @@ router.post("/sync", protect, syncClerkUser);
 router.post('/send-otp', sendOtp);
 router.post('/register', registerUser);
 router.post('/login', loginUser);
-router.post('/auth/google', googleAuth);
+
+// ─── DEPRECATED: Google OAuth idToken route ──────────────────────────────────
+// Google Sign-In is now handled by Clerk. Clients should use Clerk's Google
+// provider and then call POST /sync to create/update the DB record.
+router.post('/auth/google', (_req, res) => {
+  res.status(410).json({
+    error: "This endpoint is deprecated. Google Sign-In is now handled by Clerk. " +
+           "Use Clerk's SDK on the client, then call POST /api/users/sync.",
+  });
+});
 
 // ─── USER PROFILE (Protected Hybrid) ────────────────────────────────────────
 router.get('/profile', protect, getUserProfile);

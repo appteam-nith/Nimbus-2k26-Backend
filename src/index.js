@@ -22,8 +22,24 @@ app.use(cors({
 // Middleware to parse JSON bodies
 app.use(express.json());
 
-// Clerk — populates auth context on every request
-app.use(clerkMiddleware());
+// Clerk — populates auth context on every request.
+// Wrapped in a safety net so a malformed Authorization header never
+// throws an unhandled error and crashes the pipeline with a 500.
+app.use((req, res, next) => {
+  try {
+    clerkMiddleware()(req, res, (err) => {
+      if (err) {
+        // Clerk threw (e.g. malformed token) — log and continue.
+        // The protect middleware will still reject unauthenticated requests.
+        console.warn('[clerkMiddleware] error (ignored):', err?.message ?? err);
+      }
+      next();
+    });
+  } catch (err) {
+    console.warn('[clerkMiddleware] sync error (ignored):', err?.message ?? err);
+    next();
+  }
+});
 
 app.get('/', (req, res) => {
   res.send('Hello, Nimbus 2k26 Backend!');
