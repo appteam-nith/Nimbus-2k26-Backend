@@ -25,6 +25,10 @@ app.use(express.json());
 // Clerk — populates auth context on every request.
 // Wrapped in a safety net so a malformed Authorization header never
 // throws an unhandled error and crashes the pipeline with a 500.
+app.get('/', (req, res) => {
+  res.json({message: 'Hello, Nimbus 2k26 Backend!'});
+});
+
 app.use((req, res, next) => {
   try {
     clerkMiddleware()(req, res, (err) => {
@@ -39,10 +43,6 @@ app.use((req, res, next) => {
     console.warn('[clerkMiddleware] sync error (ignored):', err?.message ?? err);
     next();
   }
-});
-
-app.get('/', (req, res) => {
-  res.json({message: 'Hello, Nimbus 2k26 Backend!'});
 });
 
 app.use('/api/users', UserRoutes);
