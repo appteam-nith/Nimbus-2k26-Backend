@@ -1,20 +1,27 @@
-import { upsertClerkUser, findUserByClerkId, findUserById, updateUser, updateUserBalance } from "../services/user/userService.js";
-import { getAuth, clerkClient } from "@clerk/express";
+import { createUser, findUserByEmail, upsertClerkUser, findUserByClerkId, findUserById, updateUser, updateUserBalance } from "../services/user/userService.js";
+import { clerkClient } from "@clerk/express";
+import bcrypt from "bcrypt";
+import generateToken from "../services/generateTokenService.js";
+import { generateAndStoreOtp, verifyOtp } from "../services/user/otpService.js";
+import { sendOtpEmail } from "../utils/emailService.js";
+import { isAllowedCollegeEmail, isValidEmailFormat, normalizeEmail } from "../utils/authEmail.js";
+import { createEmailAuthControllers } from "./userAuthControllerFactory.js";
+
+/**
+ * ─── CLERK AUTHENTICATION ──────────────────────────────────────────────────
+ */
 
 /**
  * POST /api/users/sync
  * Protected — must be called by the client right after Clerk login.
- * Upserts the Clerk user into your Postgres DB so app-specific data
- * (virtual_balance, portfolio, trades) can be linked to them.
  */
 const syncClerkUser = async (req, res) => {
   try {
-    const { userId } = getAuth(req);
+    const userId = req.auth?.userId;
     if (!userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Fetch user details from Clerk
     const clerkUser = await clerkClient.users.getUser(userId);
     const email = clerkUser.emailAddresses?.[0]?.emailAddress ?? "";
     const name = `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || email;
@@ -32,15 +39,43 @@ const syncClerkUser = async (req, res) => {
 };
 
 /**
- * GET /api/users/profile
- * Returns the Postgres user record for the authenticated Clerk user.
+ * ─── CUSTOM JWT AUTHENTICATION ──────────────────────────────────────────────
  */
+
+const { sendOtp, registerUser, loginUser } = createEmailAuthControllers({
+  createUser,
+  findUserByEmail,
+  hashPassword: (password) => bcrypt.hash(password, 10),
+  comparePassword: (password, hashedPassword) => bcrypt.compare(password, hashedPassword),
+  tokenGenerator: generateToken,
+  generateAndStoreOtp,
+  verifyOtp,
+  sendOtpEmail,
+  normalizeEmail,
+  isValidEmailFormat,
+  isAllowedCollegeEmail,
+});
+
+/**
+ * ─── HYBRID USER PROFILE FUNCTIONS ──────────────────────────────────────────
+ * These check for both Clerk session (req.auth) AND Custom JWT (req.user)
+ */
+
+const getHybridUser = async (req) => {
+  if (req.auth && req.auth.userId) {
+    return await findUserByClerkId(req.auth.userId);
+  }
+  if (req.user && req.user.userId) {
+    return await findUserById(req.user.userId);
+  }
+  return null;
+};
+
 const getUserProfile = async (req, res) => {
   try {
-    const { userId: clerkId } = getAuth(req);
-    const user = await findUserByClerkId(clerkId);
+    const user = await getHybridUser(req);
     if (!user) {
-      return res.status(404).json({ error: "User not found. Call POST /sync first." });
+      return res.status(404).json({ error: "User not found. Call POST /sync first if using Clerk." });
     }
     res.json({ success: true, user });
   } catch (error) {
@@ -48,23 +83,13 @@ const getUserProfile = async (req, res) => {
   }
 };
 
-/**
- * PUT /api/users/profile
- * Updates the user's display name.
- */
 const updateUserProfile = async (req, res) => {
   try {
-    const { userId: clerkId } = getAuth(req);
     const { name } = req.body;
+    if (!name) return res.status(400).json({ error: "No fields to update provided" });
 
-    if (!name) {
-      return res.status(400).json({ error: "No fields to update provided" });
-    }
-
-    const existing = await findUserByClerkId(clerkId);
-    if (!existing) {
-      return res.status(404).json({ error: "User not found. Call POST /sync first." });
-    }
+    const existing = await getHybridUser(req);
+    if (!existing) return res.status(404).json({ error: "User not found." });
 
     const user = await updateUser(existing.user_id, { name });
     res.json({ success: true, message: "Profile updated", user });
@@ -73,23 +98,15 @@ const updateUserProfile = async (req, res) => {
   }
 };
 
-/**
- * PUT /api/users/balance
- * Updates the user's virtual balance.
- */
 const updateBalance = async (req, res) => {
   try {
-    const { userId: clerkId } = getAuth(req);
     const { money } = req.body;
-
     if (money === undefined || money === null) {
       return res.status(400).json({ error: "money field is required" });
     }
 
-    const existing = await findUserByClerkId(clerkId);
-    if (!existing) {
-      return res.status(404).json({ error: "User not found. Call POST /sync first." });
-    }
+    const existing = await getHybridUser(req);
+    if (!existing) return res.status(404).json({ error: "User not found." });
 
     const user = await updateUserBalance(existing.user_id, money);
     res.json({ success: true, message: "Balance updated", user });
@@ -98,4 +115,12 @@ const updateBalance = async (req, res) => {
   }
 };
 
-export { syncClerkUser, getUserProfile, updateUserProfile, updateBalance };
+export {
+  syncClerkUser,
+  sendOtp,
+  registerUser,
+  loginUser,
+  getUserProfile,
+  updateUserProfile,
+  updateBalance,
+};
