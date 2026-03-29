@@ -4,6 +4,7 @@ dotenv.config();
 
 import express from 'express';
 import UserRoutes from "./routes/userRoute.js";
+import ClubRoutes from "./routes/clubsRoute.js";
 
 
 const app = express();
@@ -21,6 +22,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/users', UserRoutes);
 
+app.use('/api/clubs', ClubRoutes);
 
 
 app.listen(PORT, () => {

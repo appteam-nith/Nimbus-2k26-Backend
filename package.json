@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
+    "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.2.3",
@@ -27,7 +28,7 @@
     "google-auth-library": "^10.5.0",
     "jsonwebtoken": "^9.0.3",
     "nodemon": "^3.1.11",
-    "pg": "^8.17.2",
+    "pg": "^8.18.0",
     "prisma": "^7.3.0"
   },
   "devDependencies": {
