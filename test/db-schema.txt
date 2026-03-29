@@ -1,0 +1,51 @@
+﻿[dotenv@17.2.3] injecting env (13) from .env -- tip: ≡ƒôí add observability to secrets: https://dotenvx.com/ops
+node : (node:1676) Warning: SECURITY 
+WARNING: The SSL modes 'prefer', 'require', 
+and 'verify-ca' are treated as aliases for 
+'verify-full'.
+At line:1 char:1
++ node test/check-columns.js 2>&1 | 
+Out-File -FilePath test/db-schema.t ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: 
+    ((node:1676) War... 'verify-full'.:Str  
+  ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommand 
+   Error
+ 
+In the next major version 
+(pg-connection-string v3.0.0 and pg 
+v9.0.0), these modes will adopt standard 
+libpq semantics, which have weaker security 
+guarantees.
+
+To prepare for this change:
+- If you want the current behavior, 
+explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 
+'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/
+libpq-ssl.html for libpq SSL mode 
+definitions.
+(Use `node --trace-warnings ...` to show 
+where the warning was created)
+
+=== Actual columns in "User" table ===
+  user_id (uuid, nullable: NO)
+  full_name (text, nullable: NO)
+  email (text, nullable: NO)
+  virtual_balance (numeric, nullable: NO)
+  created_at (timestamp without time zone, nullable: NO)
+  google_id (text, nullable: YES)
+  password (text, nullable: YES)
+  reset_token (text, nullable: YES)
+  reset_token_expires (timestamp without time zone, nullable: YES)
+  phone (text, nullable: YES)
+
+=== Applied migrations ===
+  20260210183725_init_schema | finished: Sat Mar 28 2026 23:54:26 GMT+0530 (India Standard Time) | steps: 1 | rolled_back: null
+  20260213075357_add_core_team_and_projects | finished: Sat Mar 28 2026 23:54:28 GMT+0530 (India Standard Time) | steps: 1 | rolled_back: null
+  20260213083618_add_default_to_club_type | finished: Sat Mar 28 2026 23:54:30 GMT+0530 (India Standard Time) | steps: 1 | rolled_back: null
+  20260327182741_add_user_auth_fields | finished: Sat Mar 28 2026 23:54:31 GMT+0530 (India Standard Time) | steps: 1 | rolled_back: null
+  20260328_add_clerk_id | finished: Sat Mar 28 2026 23:54:33 GMT+0530 (India Standard Time) | steps: 1 | rolled_back: null
