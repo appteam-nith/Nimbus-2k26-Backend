@@ -2,6 +2,7 @@ import { Router } from "express";
 import { 
   syncClerkUser, 
   sendOtp, 
+  verifyEmailOtp,
   registerUser, 
   loginUser, 
   getUserProfile, 
@@ -18,10 +19,24 @@ const router = Router();
 // Must be called by the client once after login to create/update DB record.
 router.post("/sync", protect, syncClerkUser);
 
-// ─── JWT CUSTOM AUTHENTICATION ──────────────────────────────────────────────
+// ─── EMAIL VERIFICATION + LEGACY AUTH SHIMS ─────────────────────────────────
 router.post('/send-otp', sendOtp);
+router.post('/send-verification-otp', sendOtp);
+router.post('/verify-email-otp', verifyEmailOtp);
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+
+router.post('/forgot-password', (_req, res) => {
+  res.status(410).json({
+    error: "Password reset is handled by Clerk. Use Clerk's reset-password flow in the client.",
+  });
+});
+
+router.post('/reset-password', (_req, res) => {
+  res.status(410).json({
+    error: "Password reset is handled by Clerk. Use Clerk's reset-password flow in the client.",
+  });
+});
 
 // ─── DEPRECATED: Google OAuth idToken route ──────────────────────────────────
 // Google Sign-In is now handled by Clerk. Clients should use Clerk's Google

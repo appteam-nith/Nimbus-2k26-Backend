@@ -2,7 +2,13 @@ import { createUser, findUserByEmail, upsertClerkUser, findUserByClerkId, findUs
 import { clerkClient } from "@clerk/express";
 import bcrypt from "bcrypt";
 import generateToken from "../services/generateTokenService.js";
-import { generateAndStoreOtp, verifyOtp } from "../services/user/otpService.js";
+import {
+  clearStoredOtp,
+  consumeEmailVerificationGrant,
+  generateAndStoreOtp,
+  grantEmailVerification,
+  verifyOtp,
+} from "../services/user/otpService.js";
 import { sendOtpEmail } from "../utils/emailService.js";
 import { isAllowedCollegeEmail, isValidEmailFormat, normalizeEmail } from "../utils/authEmail.js";
 import { createEmailAuthControllers } from "./userAuthControllerFactory.js";
@@ -23,8 +29,25 @@ const syncClerkUser = async (req, res) => {
     }
 
     const clerkUser = await clerkClient.users.getUser(userId);
-    const email = clerkUser.emailAddresses?.[0]?.emailAddress ?? "";
+    const email = normalizeEmail(clerkUser.emailAddresses?.[0]?.emailAddress ?? "");
     const name = `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || email;
+    if (!email) {
+      return res.status(400).json({ error: "No email address found on Clerk account" });
+    }
+    if (!isAllowedCollegeEmail(email)) {
+      return res.status(403).json({ error: "Only @nith.ac.in email addresses are allowed" });
+    }
+
+    const existingSyncedUser = await findUserByClerkId(userId);
+    const verificationRequired = (process.env.REQUIRE_EMAIL_VERIFICATION_OTP ?? "true") !== "false";
+    if (!existingSyncedUser && verificationRequired) {
+      const verified = consumeEmailVerificationGrant(email);
+      if (!verified) {
+        return res.status(403).json({
+          error: "Verify your NITH email with OTP before calling /api/users/sync.",
+        });
+      }
+    }
 
     const user = await upsertClerkUser(userId, name, email);
 
@@ -42,14 +65,16 @@ const syncClerkUser = async (req, res) => {
  * ─── CUSTOM JWT AUTHENTICATION ──────────────────────────────────────────────
  */
 
-const { sendOtp, registerUser, loginUser } = createEmailAuthControllers({
+const { sendOtp, verifyEmailOtp, registerUser, loginUser } = createEmailAuthControllers({
   createUser,
   findUserByEmail,
   hashPassword: (password) => bcrypt.hash(password, 10),
   comparePassword: (password, hashedPassword) => bcrypt.compare(password, hashedPassword),
   tokenGenerator: generateToken,
   generateAndStoreOtp,
+  clearStoredOtp,
   verifyOtp,
+  grantEmailVerification,
   sendOtpEmail,
   normalizeEmail,
   isValidEmailFormat,
@@ -118,6 +143,7 @@ const updateBalance = async (req, res) => {
 export {
   syncClerkUser,
   sendOtp,
+  verifyEmailOtp,
   registerUser,
   loginUser,
   getUserProfile,

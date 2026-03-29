@@ -36,6 +36,10 @@ const callAuthkeyApi = async (params) => {
 };
 
 const createTransporter = () => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error("EMAIL_USER and EMAIL_PASS must be set to send OTP emails");
+  }
+
   return nodemailer.createTransport({
     // Using Brevo SMTP Relay by default, or relying on generic SMTP config
     host: process.env.SMTP_HOST || "smtp-relay.brevo.com",
@@ -78,15 +82,20 @@ const sendPasswordResetEmail = async (toEmail, resetToken) => {
 };
 
 /**
- * Sends a 4-digit OTP to the user for registration
+ * Sends a 4-digit OTP to the user for email verification
  * @param {string} toEmail 
  * @param {string} otp 
  */
 const sendOtpEmail = async (toEmail, otp) => {
   const transporter = createTransporter();
+  const fromAddress = process.env.EMAIL_FROM;
+
+  if (!fromAddress) {
+    throw new Error("EMAIL_FROM must be set to a verified sender email address");
+  }
 
   const mailOptions = {
-    from: `"Nimbus 2k26" <${process.env.EMAIL_USER}>`,
+    from: `"Nimbus 2k26" <${fromAddress}>`,
     to: toEmail,
     subject: "Your Registration OTP — Nimbus 2k26",
     html: `
@@ -106,7 +115,13 @@ const sendOtpEmail = async (toEmail, otp) => {
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  const info = await transporter.sendMail(mailOptions);
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[sendOtpEmail] accepted:", info.accepted);
+    console.log("[sendOtpEmail] rejected:", info.rejected);
+    console.log("[sendOtpEmail] response:", info.response);
+  }
 };
 
 export { sendPasswordResetEmail, sendOtpEmail };
