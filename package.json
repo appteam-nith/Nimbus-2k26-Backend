@@ -30,7 +30,7 @@
     "deep-email-validator": "^0.1.21",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "google-auth-library": "^10.5.0",
+    "firebase-admin": "^13.7.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.4",
     "pg": "^8.17.2"
