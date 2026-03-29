@@ -25,7 +25,8 @@ const googleAuth = async (req, res) => {
     let decoded;
     try {
       decoded = await admin.auth().verifyIdToken(idToken);
-    } catch {
+    } catch (tokenErr) {
+      console.error("Firebase token verification failed:", tokenErr.message);
       return res.status(401).json({ error: "Invalid or expired Firebase ID token" });
     }
 
@@ -68,8 +69,12 @@ const googleAuth = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Google auth error:", error.message);
-    return res.status(500).json({ error: "Google authentication failed" });
+    console.error("Google auth error:", error.message, error.stack);
+    // Surface a more specific error message for easier debugging
+    const msg = error.message?.includes('column') || error.message?.includes('relation')
+      ? `Database schema error: ${error.message}`
+      : "Google authentication failed";
+    return res.status(500).json({ error: msg });
   }
 };
 
