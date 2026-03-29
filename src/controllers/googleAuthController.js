@@ -1,16 +1,18 @@
-import { OAuth2Client } from "google-auth-library";
+import admin from "../config/firebase.js";
 import { upsertGoogleUser } from "../services/user/userService.js";
 import generateToken from "../services/generateTokenService.js";
 import { isAllowedCollegeEmail, normalizeEmail } from "../utils/authEmail.js";
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
 /**
  * POST /api/users/auth/google
- * Body: { idToken: "<Google ID token from Flutter client>" }
+ * Body: { idToken: "<Firebase ID token from Flutter client>" }
  *
- * Verifies the Google ID token, upserts the user in DB,
- * and returns a signed JWT for subsequent requests.
+ * Flow:
+ *   1. Flutter signs in with Google via firebase_auth
+ *   2. Gets a Firebase ID token (user.getIdToken())
+ *   3. Sends it here
+ *   4. We verify it with Firebase Admin, validate the college email,
+ *      upsert the user in DB, and return a signed app JWT.
  */
 const googleAuth = async (req, res) => {
   try {
@@ -19,31 +21,24 @@ const googleAuth = async (req, res) => {
     if (!idToken)
       return res.status(400).json({ error: "idToken is required" });
 
-    if (!process.env.GOOGLE_CLIENT_ID)
-      return res.status(500).json({ error: "Google authentication is not configured" });
-
-    // Verify the ID token with Google
-    let payload;
+    // Verify the Firebase ID token
+    let decoded;
     try {
-      const ticket = await client.verifyIdToken({
-        idToken,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
-      payload = ticket.getPayload();
+      decoded = await admin.auth().verifyIdToken(idToken);
     } catch {
-      return res.status(401).json({ error: "Invalid or expired Google ID token" });
+      return res.status(401).json({ error: "Invalid or expired Firebase ID token" });
     }
 
     const {
-      sub: googleId,
+      uid,
       email,
       name,
       email_verified: emailVerified,
-    } = payload ?? {};
+    } = decoded;
 
     const normalizedEmail = normalizeEmail(email);
 
-    if (!googleId || !normalizedEmail)
+    if (!uid || !normalizedEmail)
       return res.status(401).json({ error: "Google authentication failed" });
 
     if (!emailVerified)
@@ -56,7 +51,10 @@ const googleAuth = async (req, res) => {
         error: "Only @nith.ac.in email addresses are allowed",
       });
 
-    const user = await upsertGoogleUser(googleId, name, normalizedEmail);
+    // Upsert user in DB (create on first sign-in, update on subsequent ones)
+    const user = await upsertGoogleUser(uid, name, normalizedEmail);
+
+    // Issue a short-lived app JWT for subsequent API calls
     const token = generateToken(user.user_id);
 
     return res.status(200).json({
