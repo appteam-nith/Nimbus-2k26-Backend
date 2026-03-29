@@ -1,7 +1,8 @@
 /**
  * Factory that creates email-auth controllers.
  *
- * POST /api/users/send-otp  — still active (email verification step)
+ * POST /api/users/send-otp         — active (email verification step)
+ * POST /api/users/verify-email-otp — active (verifies the OTP before Clerk sync)
  * POST /api/users/register  — DEPRECATED (password column dropped in migration)
  * POST /api/users/login     — DEPRECATED (password column dropped in migration)
  *
@@ -9,8 +10,10 @@
  * After Clerk login the client must call POST /api/users/sync.
  */
 const createEmailAuthControllers = ({
-  findUserByEmail,
   generateAndStoreOtp,
+  clearStoredOtp,
+  verifyOtp,
+  grantEmailVerification,
   sendOtpEmail,
   normalizeEmail,
   isValidEmailFormat,
@@ -20,7 +23,6 @@ const createEmailAuthControllers = ({
   hashPassword,
   comparePassword,
   tokenGenerator,
-  verifyOtp,
 }) => {
 
   // ── POST /api/users/send-otp ───────────────────────────────────────────────
@@ -32,16 +34,44 @@ const createEmailAuthControllers = ({
       if (!isValidEmailFormat(email)) return res.status(400).json({ error: "Please provide a valid email address" });
       if (!isAllowedCollegeEmail(email)) return res.status(400).json({ error: "Only @nith.ac.in email addresses are allowed" });
 
-      const existingUser = await findUserByEmail(email);
-      if (existingUser) return res.status(400).json({ error: "Email already in use" });
-
       const otp = generateAndStoreOtp(email);
 
-      sendOtpEmail(email, otp).catch((err) => {
+      try {
+        await sendOtpEmail(email, otp);
+      } catch (err) {
+        clearStoredOtp?.(email);
         console.error(`Failed to send OTP to ${email}:`, err.message);
-      });
+        return res.status(502).json({ error: "Failed to send OTP email" });
+      }
 
-      return res.status(200).json({ success: true, message: "OTP sent successfully" });
+      return res.status(200).json({ success: true, message: "Verification OTP sent successfully" });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  };
+
+  // ── POST /api/users/verify-email-otp ─────────────────────────────────────
+  const verifyEmailOtp = async (req, res) => {
+    try {
+      const email = normalizeEmail(req.body.email);
+      const otp = typeof req.body.otp === "string" ? req.body.otp.trim() : "";
+
+      if (!email) return res.status(400).json({ error: "email is required" });
+      if (!otp) return res.status(400).json({ error: "otp is required" });
+      if (!isValidEmailFormat(email)) return res.status(400).json({ error: "Please provide a valid email address" });
+      if (!isAllowedCollegeEmail(email)) return res.status(400).json({ error: "Only @nith.ac.in email addresses are allowed" });
+
+      const isValid = verifyOtp(email, otp);
+      if (!isValid) {
+        return res.status(400).json({ error: "Invalid or expired OTP" });
+      }
+
+      grantEmailVerification?.(email);
+
+      return res.status(200).json({
+        success: true,
+        message: "Email verified successfully. Complete Clerk sign-in and then call /api/users/sync.",
+      });
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }
@@ -68,7 +98,7 @@ const createEmailAuthControllers = ({
     });
   };
 
-  return { sendOtp, registerUser, loginUser };
+  return { sendOtp, verifyEmailOtp, registerUser, loginUser };
 };
 
 export { createEmailAuthControllers };

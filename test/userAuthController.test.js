@@ -22,13 +22,14 @@ const makeRes = () => {
 
 const makeControllers = (overrides = {}) =>
   createEmailAuthControllers({
-    createUser: async (name, email, password) => ({ user_id: "user-1", full_name: name, email, password }),
-    findUserByEmail: async () => null,
+    createUser: async () => ({ user_id: "user-1" }),
     hashPassword: async (password) => `hashed:${password}`,
     comparePassword: async (password, hashedPassword) => hashedPassword === `hashed:${password}`,
     tokenGenerator: () => "signed-jwt",
     generateAndStoreOtp: () => "1234",
+    clearStoredOtp: () => {},
     verifyOtp: () => true,
+    grantEmailVerification: () => {},
     sendOtpEmail: async () => {},
     normalizeEmail,
     isValidEmailFormat,
@@ -46,6 +47,16 @@ test("sendOtp rejects non-college domains", async () => {
   assert.deepEqual(res.body, { error: "Only @nith.ac.in email addresses are allowed" });
 });
 
+test("sendOtp allows existing users because OTP is for verification, not registration", async () => {
+  const { sendOtp } = makeControllers();
+  const res = makeRes();
+
+  await sendOtp(makeReq({ email: "24bcs047@nith.ac.in" }), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { success: true, message: "Verification OTP sent successfully" });
+});
+
 test("sendOtp succeeds for valid nith email", async () => {
   let sentEmail = "";
   let sentOtp = "";
@@ -60,104 +71,74 @@ test("sendOtp succeeds for valid nith email", async () => {
   await sendOtp(makeReq({ email: "24BCS047@NITH.AC.IN" }), res);
 
   assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { success: true, message: "Verification OTP sent successfully" });
   assert.equal(sentEmail, "24bcs047@nith.ac.in");
   assert.equal(sentOtp, "1234");
 });
 
-test("registerUser rejects non-college domains", async () => {
-  const { registerUser } = makeControllers();
+test("sendOtp clears OTP and returns 502 when email delivery fails", async () => {
+  let clearedEmail = "";
+  const { sendOtp } = makeControllers({
+    clearStoredOtp: (email) => {
+      clearedEmail = email;
+    },
+    sendOtpEmail: async () => {
+      throw new Error("SMTP auth failed");
+    },
+  });
   const res = makeRes();
 
-  await registerUser(
-    makeReq({ name: "Blocked", email: "blocked@gmail.com", password: "password123", otp: "1234" }),
-    res,
-  );
+  await sendOtp(makeReq({ email: "24BCS047@NITH.AC.IN" }), res);
 
-  assert.equal(res.statusCode, 400);
-  assert.deepEqual(res.body, { error: "Only @nith.ac.in email addresses are allowed" });
+  assert.equal(res.statusCode, 502);
+  assert.deepEqual(res.body, { error: "Failed to send OTP email" });
+  assert.equal(clearedEmail, "24bcs047@nith.ac.in");
 });
 
-test("registerUser rejects invalid otp", async () => {
-  const { registerUser } = makeControllers({
+test("verifyEmailOtp rejects an invalid code", async () => {
+  const { verifyEmailOtp } = makeControllers({
     verifyOtp: () => false,
   });
   const res = makeRes();
 
-  await registerUser(
-    makeReq({ name: "Test User", email: "24bcs047@nith.ac.in", password: "password123", otp: "9999" }),
-    res,
-  );
+  await verifyEmailOtp(makeReq({ email: "24bcs047@nith.ac.in", otp: "9999" }), res);
 
   assert.equal(res.statusCode, 400);
   assert.deepEqual(res.body, { error: "Invalid or expired OTP" });
 });
 
-test("registerUser succeeds for valid nith email and otp", async () => {
-  let createdUser;
-  const { registerUser } = makeControllers({
-    createUser: async (name, email, password) => {
-      createdUser = { name, email, password };
-      return { user_id: "user-1", full_name: name, email };
+test("verifyEmailOtp grants verification for a valid code", async () => {
+  let grantedEmail = "";
+  const { verifyEmailOtp } = makeControllers({
+    grantEmailVerification: (email) => {
+      grantedEmail = email;
     },
   });
   const res = makeRes();
 
-  await registerUser(
-    makeReq({ name: "Test User", email: "24BCS047@NITH.AC.IN", password: "password123", otp: "1234" }),
-    res,
-  );
+  await verifyEmailOtp(makeReq({ email: "24BCS047@NITH.AC.IN", otp: "1234" }), res);
 
-  assert.equal(res.statusCode, 201);
-  assert.deepEqual(createdUser, {
-    name: "Test User",
-    email: "24bcs047@nith.ac.in",
-    password: "hashed:password123",
-  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(grantedEmail, "24bcs047@nith.ac.in");
+  assert.match(res.body.message, /Email verified successfully/i);
 });
 
-test("loginUser rejects non-college domains", async () => {
+test("registerUser returns 410 because email/password registration is deprecated", async () => {
+  const { registerUser } = makeControllers();
+  const res = makeRes();
+
+  await registerUser(makeReq({}), res);
+
+  assert.equal(res.statusCode, 410);
+  assert.match(res.body.error, /Email\/password registration is no longer supported/i);
+});
+
+test("loginUser returns 410 because email/password login is deprecated", async () => {
   const { loginUser } = makeControllers();
   const res = makeRes();
 
-  await loginUser(makeReq({ email: "blocked@gmail.com", password: "password123" }), res);
+  await loginUser(makeReq({}), res);
 
-  assert.equal(res.statusCode, 400);
-  assert.deepEqual(res.body, { error: "Only @nith.ac.in email addresses are allowed" });
-});
-
-test("loginUser rejects google-only accounts for password login", async () => {
-  const { loginUser } = makeControllers({
-    findUserByEmail: async () => ({ user_id: "user-1", email: "24bcs047@nith.ac.in", password: null }),
-  });
-  const res = makeRes();
-
-  await loginUser(makeReq({ email: "24bcs047@nith.ac.in", password: "password123" }), res);
-
-  assert.equal(res.statusCode, 401);
-  assert.deepEqual(res.body, { error: "This account uses Google Sign-In. Please log in with Google." });
-});
-
-test("loginUser rejects invalid password", async () => {
-  const { loginUser } = makeControllers({
-    findUserByEmail: async () => ({ user_id: "user-1", email: "24bcs047@nith.ac.in", password: "hashed:other" }),
-  });
-  const res = makeRes();
-
-  await loginUser(makeReq({ email: "24bcs047@nith.ac.in", password: "password123" }), res);
-
-  assert.equal(res.statusCode, 401);
-  assert.deepEqual(res.body, { error: "Invalid Password" });
-});
-
-test("loginUser succeeds for valid nith email and password", async () => {
-  const { loginUser } = makeControllers({
-    findUserByEmail: async () => ({ user_id: "user-1", email: "24bcs047@nith.ac.in", password: "hashed:password123" }),
-  });
-  const res = makeRes();
-
-  await loginUser(makeReq({ email: "24BCS047@NITH.AC.IN", password: "password123" }), res);
-
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.token, "signed-jwt");
+  assert.equal(res.statusCode, 410);
+  assert.match(res.body.error, /Email\/password login is no longer supported/i);
 });
