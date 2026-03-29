@@ -18,35 +18,36 @@ enum ClubType {
 
 model User {
   user_id         String    @id @default(uuid()) @db.Uuid
-  clerk_id        String    @unique                          // Clerk user ID (e.g. user_2abc...)
+  // google_id is set for Google Sign-In users, null for email/OTP users
+  google_id       String?   @unique
   full_name       String
   email           String    @unique
   virtual_balance Decimal   @default(10000.00) @db.Decimal(18, 2)
   created_at      DateTime  @default(now())
 
-  portfolio       UserPortfolio[]
-  trades          TradeTransaction[]
+  portfolio UserPortfolio[]
+  trades    TradeTransaction[]
 }
 
 model CoreTeamMember {
-  id        Int      @id @default(autoincrement())
-  name      String
-  role      String
-  image_url String?
-  linkedin  String?
+  id         Int      @id @default(autoincrement())
+  name       String
+  role       String
+  image_url  String?
+  linkedin   String?
   created_at DateTime @default(now())
 }
 
 model Club {
-  club_id     Int      @id @default(autoincrement())
-  club_name   String   @unique
-  club_type   ClubType @default(DEPARTMENTAL)
-  department  String?
-  created_at  DateTime @default(now())
+  club_id    Int      @id @default(autoincrement())
+  club_name  String   @unique
+  club_type  ClubType @default(DEPARTMENTAL)
+  department String?
+  created_at DateTime @default(now())
 
-  events      Event[]
-  projects    Project[]
-  stock       Stock?
+  events   Event[]
+  projects Project[]
+  stock    Stock?
 }
 
 model Project {
@@ -56,23 +57,23 @@ model Project {
   image_url    String?
   created_at   DateTime @default(now())
 
-  club_id      Int
-  club         Club     @relation(fields: [club_id], references: [club_id], onDelete: Cascade)
+  club_id Int
+  club    Club @relation(fields: [club_id], references: [club_id], onDelete: Cascade)
 
   @@index([club_id])
 }
 
 model Event {
-  event_id           Int      @id @default(autoincrement())
-  event_name         String
-  venue              String
-  image_url          String?
-  extra_details      Json?
-  event_time         DateTime
-  created_at         DateTime @default(now())
+  event_id      Int      @id @default(autoincrement())
+  event_name    String
+  venue         String
+  image_url     String?
+  extra_details Json?
+  event_time    DateTime
+  created_at    DateTime @default(now())
 
   organizing_club_id Int
-  club               Club     @relation(fields: [organizing_club_id], references: [club_id], onDelete: Cascade)
+  club               Club @relation(fields: [organizing_club_id], references: [club_id], onDelete: Cascade)
 
   @@index([event_time])
 }
@@ -84,50 +85,50 @@ model Stock {
   last_updated  DateTime @default(now())
   created_at    DateTime @default(now())
 
-  club_id       Int      @unique
-  club          Club     @relation(fields: [club_id], references: [club_id], onDelete: Cascade)
+  club_id Int  @unique
+  club    Club @relation(fields: [club_id], references: [club_id], onDelete: Cascade)
 
-  prices        StockPrice[]
-  portfolios    UserPortfolio[]
-  trades        TradeTransaction[]
+  prices     StockPrice[]
+  portfolios UserPortfolio[]
+  trades     TradeTransaction[]
 }
 
 model StockPrice {
-  price_id     Int      @id @default(autoincrement())
-  price        Decimal  @db.Decimal(18, 4)
-  recorded_at  DateTime @default(now())
+  price_id    Int      @id @default(autoincrement())
+  price       Decimal  @db.Decimal(18, 4)
+  recorded_at DateTime @default(now())
 
-  stock_id     Int
-  stock        Stock    @relation(fields: [stock_id], references: [stock_id], onDelete: Cascade)
+  stock_id Int
+  stock    Stock @relation(fields: [stock_id], references: [stock_id], onDelete: Cascade)
 
   @@index([stock_id, recorded_at(sort: Desc)])
 }
 
 model UserPortfolio {
-  user_id       String   @db.Uuid
+  user_id       String  @db.Uuid
   stock_id      Int
-  shares_owned  Decimal  @default(0) @db.Decimal(18, 6)
-  avg_buy_price Decimal  @default(0) @db.Decimal(18, 4)
+  shares_owned  Decimal @default(0) @db.Decimal(18, 6)
+  avg_buy_price Decimal @default(0) @db.Decimal(18, 4)
 
-  user          User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-  stock         Stock    @relation(fields: [stock_id], references: [stock_id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  stock Stock @relation(fields: [stock_id], references: [stock_id], onDelete: Cascade)
 
   @@id([user_id, stock_id])
   @@index([user_id])
 }
 
 model TradeTransaction {
-  transaction_id  Int      @id @default(autoincrement())
+  transaction_id  Int       @id @default(autoincrement())
   trade           TradeType
-  shares          Decimal  @db.Decimal(18, 6)
-  price_per_share Decimal  @db.Decimal(18, 4)
-  executed_at     DateTime @default(now())
+  shares          Decimal   @db.Decimal(18, 6)
+  price_per_share Decimal   @db.Decimal(18, 4)
+  executed_at     DateTime  @default(now())
 
-  user_id         String   @db.Uuid
-  stock_id        Int
+  user_id  String @db.Uuid
+  stock_id Int
 
-  user            User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-  stock           Stock    @relation(fields: [stock_id], references: [stock_id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  stock Stock @relation(fields: [stock_id], references: [stock_id], onDelete: Cascade)
 
   @@index([user_id, executed_at(sort: Desc)])
 }

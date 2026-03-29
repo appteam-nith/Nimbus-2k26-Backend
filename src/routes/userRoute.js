@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { 
-  syncClerkUser, 
-  sendOtp, 
-  registerUser, 
-  loginUser, 
-  getUserProfile, 
-  updateUserProfile, 
-  updateBalance 
+import { googleAuth } from "../controllers/googleAuthController.js";
+import {
+  sendOtp,
+  verifyOtpAndLogin,
+  resendOtp,
+  getUserProfile,
+  updateUserProfile,
+  updateBalance,
 } from "../controllers/usercontroller.js";
 import { getEventsByDate } from "../controllers/eventControllers.js";
 import validateDate from "../middlewares/valDateMiddleware.js";
@@ -14,31 +14,29 @@ import protect from "../middlewares/authMiddleware.js";
 
 const router = Router();
 
-// ─── CLERK AUTHENTICATION ──────────────────────────────────────────────────
-// Must be called by the client once after login to create/update DB record.
-router.post("/sync", protect, syncClerkUser);
+// ─── GOOGLE AUTH ──────────────────────────────────────────────
+// Body: { idToken }  →  returns { token, user }
+router.post("/auth/google", googleAuth);
 
-// ─── JWT CUSTOM AUTHENTICATION ──────────────────────────────────────────────
-router.post('/send-otp', sendOtp);
-router.post('/register', registerUser);
-router.post('/login', loginUser);
+// ─── EMAIL / OTP AUTH ─────────────────────────────────────────
+// Step 1: send a 4-digit OTP to the college email
+// Body: { email }
+router.post("/send-otp", sendOtp);
 
-// ─── DEPRECATED: Google OAuth idToken route ──────────────────────────────────
-// Google Sign-In is now handled by Clerk. Clients should use Clerk's Google
-// provider and then call POST /sync to create/update the DB record.
-router.post('/auth/google', (_req, res) => {
-  res.status(410).json({
-    error: "This endpoint is deprecated. Google Sign-In is now handled by Clerk. " +
-           "Use Clerk's SDK on the client, then call POST /api/users/sync.",
-  });
-});
+// Step 2: verify OTP and receive a JWT
+// Body: { email, otp, name? }   ← name required only for new accounts
+router.post("/verify-otp", verifyOtpAndLogin);
 
-// ─── USER PROFILE (Protected Hybrid) ────────────────────────────────────────
-router.get('/profile', protect, getUserProfile);
-router.put('/profile', protect, updateUserProfile);
-router.put('/balance', protect, updateBalance);
+// Resend a fresh OTP (resets expiry)
+// Body: { email }
+router.post("/resend-otp", resendOtp);
 
-// ─── EVENT TIMELINE ─────────────────────────────────────────────────────────
-router.get('/events', validateDate, getEventsByDate);
+// ─── PROTECTED PROFILE ────────────────────────────────────────
+router.get("/profile", protect, getUserProfile);
+router.put("/profile", protect, updateUserProfile);
+router.put("/balance", protect, updateBalance);
+
+// ─── EVENTS (public) ─────────────────────────────────────────
+router.get("/events", validateDate, getEventsByDate);
 
 export default router;

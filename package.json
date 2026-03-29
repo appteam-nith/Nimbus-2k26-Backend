@@ -18,12 +18,9 @@
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "test": "node test/api-test.js",
-    "test:local": "node test/api-test.js --local",
-    "test:auth": "node test/auth-debug.js",
-    "test:auth:local": "node test/auth-debug.js --local"
+    "test:local": "node test/api-test.js --local"
   },
   "dependencies": {
-    "@clerk/express": "^2.0.7",
     "@neondatabase/serverless": "^1.0.2",
     "@prisma/adapter-neon": "^7.3.0",
     "@prisma/adapter-pg": "^7.3.0",
