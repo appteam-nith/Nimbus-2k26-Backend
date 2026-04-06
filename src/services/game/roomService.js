@@ -123,3 +123,45 @@ export async function getAlivePlayers(roomCode) {
     select: { id: true, user_id: true, role: true },
   });
 }
+
+// ─── LEAVE ROOM ───────────────────────────────────────────────────────────────
+
+export async function leaveRoom(roomCode, userId) {
+  const room = await prisma.gameRoom.findUnique({
+    where: { room_code: roomCode },
+    include: { players: true },
+  });
+
+  if (!room) return;
+
+  // If game is in lobby, player can just leave
+  const player = room.players.find((p) => p.user_id === userId);
+  if (!player) return;
+
+  if (room.status === "LOBBY") {
+    await prisma.gamePlayer.delete({
+      where: { room_code_user_id: { room_code: roomCode, user_id: userId } },
+    });
+
+    const remainingPlayers = room.players.filter((p) => p.user_id !== userId);
+
+    if (remainingPlayers.length === 0) {
+      // Room is empty, delete it
+      await prisma.gameRoom.delete({
+        where: { room_code: roomCode },
+      });
+      return { deleted: true };
+    } else if (room.host_id === userId) {
+      // Host left, assign a new host
+      const newHost = remainingPlayers[0];
+      await prisma.gameRoom.update({
+        where: { room_code: roomCode },
+        data: { host_id: newHost.user_id },
+      });
+      return { newHostId: newHost.user_id };
+    }
+  } else {
+    // If game started...
+  }
+  return {};
+}

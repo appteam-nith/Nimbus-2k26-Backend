@@ -87,6 +87,32 @@ export const handleJoinRoom = async (req, res) => {
   }
 };
 
+// ─── LEAVE ROOM ───────────────────────────────────────────────────────────────
+
+export const handleLeaveRoom = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { room_code } = req.body;
+
+    if (!room_code) return res.status(400).json({ error: "room_code is required" });
+
+    const { leaveRoom } = await import("../services/game/roomService.js");
+    const result = await leaveRoom(room_code, userId);
+
+    if (result && !result.deleted) {
+      await pusher.trigger(`room-${room_code}`, "player-left", {
+        userId,
+        newHostId: result.newHostId,
+      });
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("[leaveRoom]", err.message);
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+};
+
 // ─── GET ROOM STATE ───────────────────────────────────────────────────────────
 
 export const handleGetRoom = async (req, res) => {
