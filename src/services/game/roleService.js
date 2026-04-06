@@ -81,10 +81,12 @@ function pickRandom(arr, n) {
 
 /**
  * Assigns roles to all players in a room based on room_size.
+ * In dev mode, `bots` is the pre-assigned bot list. Real players get
+ * the remaining (non-MAFIA) roles from the pool.
  * Returns a map of { playerId → GameRole }.
  * Does NOT write to DB — caller handles the transaction.
  */
-export function buildRoleAssignments(players, roomSize) {
+export function buildRoleAssignments(players, roomSize, bots = []) {
   const config = ROLE_CONFIG[roomSize];
   if (!config) throw new Error(`Unknown room size: ${roomSize}`);
 
@@ -99,6 +101,32 @@ export function buildRoleAssignments(players, roomSize) {
     const { roles, pick } = config.randomPool;
     const picked = pickRandom(roles, pick);
     rolePool.push(...picked);
+  }
+
+  if (bots.length > 0) {
+    // Dev mode: remove one MAFIA slot per bot from the pool
+    // (bots are already assigned MAFIA by the caller)
+    let mafiaToRemove = bots.length;
+    const devPool = rolePool.filter((r) => {
+      if (r === "MAFIA" && mafiaToRemove > 0) {
+        mafiaToRemove--;
+        return false;
+      }
+      return true;
+    });
+
+    if (devPool.length !== players.length) {
+      throw new Error(
+        `Dev role pool size ${devPool.length} does not match real player count ${players.length}`
+      );
+    }
+
+    shuffle(devPool);
+    const assignments = {};
+    players.forEach((p, idx) => {
+      assignments[p.id] = devPool[idx];
+    });
+    return assignments;
   }
 
   if (rolePool.length !== players.length) {
