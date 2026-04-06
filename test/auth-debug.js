@@ -9,7 +9,7 @@
 
 const BASE_URL = process.argv.includes('--local')
   ? 'http://localhost:3000'
-  : 'https://nimbus-2k26-backend-2.onrender.com';
+  : 'https://nimbus-2k26-backend-olhw.onrender.com';
 
 const C = {
   reset:  '\x1b[0m',

@@ -1,0 +1,124 @@
+﻿[dotenv@17.2.3] injecting env (15) from .env -- tip: Γ£à audit secrets and track compliance: https://dotenvx.com/ops
+
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+STEP 1: Checking Firebase environment variables
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+FIREBASE_PROJECT_ID   : nimbus-2k26-6d468
+FIREBASE_CLIENT_EMAIL : firebase-adminsdk-fbsvc@nimbus-2k26-6d468.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY  : Γ£à Present (starts with: -----BEGIN PRIVATE KEY-----
+MIIEvQIBADAN...)
+
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+STEP 2: Initialising Firebase Admin SDK
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+Γ£à Firebase Admin initialised successfully
+
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+STEP 3: Checking database connection and User table
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒôí add observability to secrets: https://dotenvx.com/ops
+node : (node:22384) Warning: 
+SECURITY WARNING: The SSL 
+modes 'prefer', 'require', and 
+'verify-ca' are treated as 
+aliases for 'verify-full'.
+At line:1 char:1
++ node test-auth.js 2>&1 | 
+Out-File -Encoding utf8 
+test-auth-output.txt ...
++ ~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          :  
+   NotSpecified: ((node:22384  
+  ) Wa... 'verify-full'.:Str   
+ ing) [], RemoteException
+    + FullyQualifiedErrorId :  
+   NativeCommandError
+ 
+In the next major version 
+(pg-connection-string v3.0.0 
+and pg v9.0.0), these modes 
+will adopt standard libpq 
+semantics, which have weaker 
+security guarantees.
+
+To prepare for this change:
+- If you want the current 
+behavior, explicitly use 
+'sslmode=verify-full'
+- If you want libpq 
+compatibility now, use 'uselibp
+qcompat=true&sslmode=require'
+
+See https://www.postgresql.org/
+docs/current/libpq-ssl.html 
+for libpq SSL mode definitions.
+(Use `node --trace-warnings 
+...` to show where the warning 
+was created)
+Γ£à DB connected ΓÇö User table has 0 row(s)
+
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+STEP 4: Simulating controller logic with a fake @nith.ac.in token
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+Normalized email : testuser@nith.ac.in
+Email verified   : true
+Allowed domain?  : Γ£à YES
+Γ¥î upsertGoogleUser FAILED: 
+Invalid 
+`prisma.user.findUnique()` 
+invocation:
+
+{
+  where: {
+    google_id: "test-uid-123",
+    ~~~~~~~~~
+?   user_id?: String,
+?   clerk_id?: String,
+?   email?: String,
+?   AND?: UserWhereInput | 
+UserWhereInput[],
+?   OR?: UserWhereInput[],
+?   NOT?: UserWhereInput | 
+UserWhereInput[],
+?   full_name?: StringFilter | 
+String,
+?   virtual_balance?: 
+DecimalFilter | Decimal,
+?   created_at?: 
+DateTimeFilter | DateTime,
+?   portfolio?: UserPortfolioLi
+stRelationFilter,
+?   trades?: TradeTransactionLi
+stRelationFilter
+  },
+  select: {
+    user_id: true,
+    google_id: true,
+    full_name: true,
+    email: true,
+    virtual_balance: true
+  }
+}
+
+Unknown argument `google_id`. 
+Available options are marked 
+with ?.
+  This is likely a schema 
+mismatch (column missing/extra)
+
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+STEP 5: Hitting the live /api/users/auth/google with a bad token
+         (expects 401 ΓÇö proves the endpoint is reachable)
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+Γ¥î Could not reach backend at 
+http://localhost:3000 ΓÇö 
+fetch failed
+   Add BACKEND_URL=https://your
+-render-url.onrender.com to 
+.env to test live
+
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+Done. If all steps show Γ£à, the backend auth is healthy.
+If Step 5 fails with a 500, check FIREBASE_PRIVATE_KEY on Render.
+ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+

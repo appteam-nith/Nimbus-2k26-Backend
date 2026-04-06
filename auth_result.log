@@ -1,0 +1,61 @@
+﻿[dotenv@17.2.3] injecting env (15) from .env -- tip: ≡ƒôí add observability to secrets: https://dotenvx.com/ops
+=== STEP 1: Firebase Env Vars ===
+PROJECT_ID set:    YES
+CLIENT_EMAIL set:  YES
+PRIVATE_KEY set:   YES (length=1704)
+PRIVATE_KEY starts:-----BEGIN PRIVATE KEY-----
+
+=== STEP 2: Firebase Admin SDK ===
+Firebase Admin: OK
+
+=== STEP 3: Database ===
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+(node:26012) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+System.Management.Automation.RemoteException
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+System.Management.Automation.RemoteException
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
+DB connected. User count: 0
+
+=== STEP 4: upsertGoogleUser ===
+upsertGoogleUser FAILED: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    google_id: "diag-uid-999",
+    ~~~~~~~~~
+?   user_id?: String,
+?   clerk_id?: String,
+?   email?: String,
+?   AND?: UserWhereInput | UserWhereInput[],
+?   OR?: UserWhereInput[],
+?   NOT?: UserWhereInput | UserWhereInput[],
+?   full_name?: StringFilter | String,
+?   virtual_balance?: DecimalFilter | Decimal,
+?   created_at?: DateTimeFilter | DateTime,
+?   portfolio?: UserPortfolioListRelationFilter,
+?   trades?: TradeTransactionListRelationFilter
+  },
+  select: {
+    user_id: true,
+    google_id: true,
+    full_name: true,
+    email: true,
+    virtual_balance: true
+  }
+}
+
+Unknown argument `google_id`. Available options are marked with ?.
+
+=== STEP 5: Email Domain Check ===
+isAllowedCollegeEmail('someone@nith.ac.in'): true
+
+=== STEP 6: JWT generation ===
+generateToken OK. JWT length: 165
+
+=== DONE ===

@@ -1,0 +1,15 @@
+﻿80b46e7 feat: cop investigation result + full nurse/doctor synergy in night resolution
+66b076e fix: rename malformed migration dirs and add game tables migration
+5e01563 Merge pull request #34 from ayush1229/main
+061f3b7 pusher
+6d8ad3d Merge pull request #33 from ayush1229/main
+3a119e8 feat: add Nimbus Mafia game engine (Dev 1) - Pusher config, role/vote/room/resolve services, game controller + routes, heartbeat loop
+d1c5a94 Merge pull request #32 from ayush1229/main
+3a30bbd fix: remove url from datasource block (not supported in Prisma 7 schema files)
+dee6614 Merge pull request #31 from ayush1229/main
+5eb905e fix: remove duplicate generator/datasource/model blocks from schema.prisma
+615fc6e Merge pull request #30 from ayush1229/main
+37e73f9 updated schema.prisma
+57481f5 Merge pull request #29 from ShivamGoel82/main
+adc1192 Merge branch 'appteam-nith:main' into main
+fab9000 feat: add /delete-account page for Play Store data deletion requirement

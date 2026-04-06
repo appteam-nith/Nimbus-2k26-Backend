@@ -7,7 +7,9 @@ const __dirname = dirname(__filename);
 
 dotenv.config({ path: join(__dirname, '../../.env') });
 
-import { PrismaClient } from "@prisma/client";
+import pkg from '@prisma/client';
+const { PrismaClient } = pkg;
+
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 
@@ -17,6 +19,7 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
 });
 
 // Handle pool errors to prevent uncaught exceptions

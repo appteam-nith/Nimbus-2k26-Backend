@@ -1,0 +1,55 @@
+UPSERT ERROR:
+
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    google_id: "diag-001"
+  },
+  select: {
+    user_id: true,
+    google_id: true,
+    full_name: true,
+    email: true,
+    virtual_balance: true,
+    ~~~~~~~~~~~~~~~
+?   created_at?: true,
+?   game_players?: true,
+?   hosted_rooms?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `virtual_balance` for select statement on model `User`. Available options are marked with ?.
+
+STACK:
+PrismaClientValidationError: 
+Invalid `prisma.user.findUnique()` invocation:
+
+{
+  where: {
+    google_id: "diag-001"
+  },
+  select: {
+    user_id: true,
+    google_id: true,
+    full_name: true,
+    email: true,
+    virtual_balance: true,
+    ~~~~~~~~~~~~~~~
+?   created_at?: true,
+?   game_players?: true,
+?   hosted_rooms?: true,
+?   _count?: true
+  }
+}
+
+Unknown field `virtual_balance` for select statement on model `User`. Available options are marked with ?.
+    at ar (D:\AppTeam\Nimbus-2k26\Nimbus-2k26-Backend\node_modules\@prisma\client\runtime\client.js:10:1379)
+    at zr.handleRequestError (D:\AppTeam\Nimbus-2k26\Nimbus-2k26-Backend\node_modules\@prisma\client\runtime\client.js:65:7815)
+    at zr.handleAndLogRequestError (D:\AppTeam\Nimbus-2k26\Nimbus-2k26-Backend\node_modules\@prisma\client\runtime\client.js:65:7467)
+    at zr.request (D:\AppTeam\Nimbus-2k26\Nimbus-2k26-Backend\node_modules\@prisma\client\runtime\client.js:65:7174)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (D:\AppTeam\Nimbus-2k26\Nimbus-2k26-Backend\node_modules\@prisma\client\runtime\client.js:75:5816)
+    at async upsertGoogleUser (file:///D:/AppTeam/Nimbus-2k26/Nimbus-2k26-Backend/src/services/user/userService.js:11:14)
+    at async file:///D:/AppTeam/Nimbus-2k26/Nimbus-2k26-Backend/test-auth.js:42:13

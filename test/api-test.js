@@ -11,7 +11,7 @@
 
 const BASE_URL = process.argv.includes('--local')
   ? 'http://localhost:3000'
-  : 'https://nimbus-2k26-backend-2.onrender.com';
+  : 'https://nimbus-2k26-backend-olhw.onrender.com';
 
 // ─── ANSI colours ────────────────────────────────────────────
 const C = {

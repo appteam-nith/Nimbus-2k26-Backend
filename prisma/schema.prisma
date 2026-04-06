@@ -6,47 +6,106 @@ datasource db {
   provider = "postgresql"
 }
 
-enum TradeType {
-  BUY
-  SELL
-}
+//////////////////////
+// EXISTING ENUMS
+//////////////////////
 
 enum ClubType {
   DEPARTMENTAL
   CORE
 }
 
-model User {
-  user_id         String    @id @default(uuid()) @db.Uuid
-  clerk_id        String    @unique                          // Clerk user ID (e.g. user_2abc...)
-  full_name       String
-  email           String    @unique
-  virtual_balance Decimal   @default(10000.00) @db.Decimal(18, 2)
-  created_at      DateTime  @default(now())
+//////////////////////
+// GAME ENUMS
+//////////////////////
 
-  portfolio       UserPortfolio[]
-  trades          TradeTransaction[]
+enum GameStatus {
+  LOBBY
+  DISCUSSION
+  NIGHT
+  VOTING
+  REVEAL
+  ENDED
 }
 
+enum GameWinner {
+  MAFIA
+  CITIZENS
+}
+
+enum GameRole {
+  MAFIA
+  MAFIA_HELPER
+  HITMAN
+  CITIZEN
+  DOCTOR
+  COP
+  NURSE
+  BOUNTY_HUNTER
+  PROPHET
+  REPORTER
+}
+
+enum PlayerStatus {
+  ALIVE
+  ELIMINATED
+}
+
+enum GameRoomSize {
+  FIVE
+  EIGHT
+  TWELVE
+}
+
+enum VoteType {
+  DAY_LYNCH
+  MAFIA_TARGET
+  DOC_SAVE
+  COP_INVESTIGATE
+  NURSE_ACTION
+  HITMAN_TARGET
+  BOUNTY_HUNTER_VIP
+  BOUNTY_HUNTER_SHOT
+  REPORTER_EXPOSE
+}
+
+//////////////////////
+// USER
+//////////////////////
+
+model User {
+  user_id    String   @id @default(uuid()) @db.Uuid
+  google_id  String?  @unique
+  full_name  String
+  email      String   @unique
+  created_at DateTime @default(now())
+
+  game_players GamePlayer[]
+  hosted_rooms GameRoom[]   @relation("RoomHost")
+}
+
+//////////////////////
+// CLUB SYSTEM
+//////////////////////
+
 model CoreTeamMember {
-  id        Int      @id @default(autoincrement())
-  name      String
-  role      String
-  image_url String?
-  linkedin  String?
+  id         Int      @id @default(autoincrement())
+  name       String
+  role       String
+  image_url  String?
+  linkedin   String?
   created_at DateTime @default(now())
 }
 
 model Club {
-  club_id     Int      @id @default(autoincrement())
-  club_name   String   @unique
-  club_type   ClubType @default(DEPARTMENTAL)
-  department  String?
-  created_at  DateTime @default(now())
+  club_id    Int      @id @default(autoincrement())
+  club_name  String   @unique
+  club_type  ClubType @default(DEPARTMENTAL)
+  department String?
+  created_at DateTime @default(now())
 
-  events      Event[]
-  projects    Project[]
-  stock       Stock?
+  events   Event[]
+  projects Project[]
 }
 
 model Project {
@@ -56,8 +115,8 @@ model Project {
   image_url    String?
   created_at   DateTime @default(now())
 
-  club_id      Int
-  club         Club     @relation(fields: [club_id], references: [club_id], onDelete: Cascade)
+  club_id Int
+  club    Club @relation(fields: [club_id], references: [club_id], onDelete: Cascade)
 
   @@index([club_id])
 }
@@ -72,62 +131,95 @@ model Event {
   created_at         DateTime @default(now())
 
   organizing_club_id Int
-  club               Club     @relation(fields: [organizing_club_id], references: [club_id], onDelete: Cascade)
+  club               Club @relation(fields: [organizing_club_id], references: [club_id], onDelete: Cascade)
 
   @@index([event_time])
 }
 
-model Stock {
-  stock_id      Int      @id @default(autoincrement())
-  symbol        String   @unique
-  current_price Decimal  @default(10.00) @db.Decimal(18, 4)
-  last_updated  DateTime @default(now())
-  created_at    DateTime @default(now())
+//////////////////////
+// GAME ROOM
+//////////////////////
 
-  club_id       Int      @unique
-  club          Club     @relation(fields: [club_id], references: [club_id], onDelete: Cascade)
+model GameRoom {
+  room_code String @id
 
-  prices        StockPrice[]
-  portfolios    UserPortfolio[]
-  trades        TradeTransaction[]
+  host_id String @db.Uuid
+  host    User   @relation("RoomHost", fields: [host_id], references: [user_id], onDelete: Cascade)
+
+  room_size GameRoomSize
+
+  status GameStatus @default(LOBBY)
+  round  Int        @default(0)
+
+  phase_ends_at      DateTime?
+  discussion_seconds Int       @default(30)
+
+  eliminated_this_round String?
+  winner                GameWinner?
+  nurse_met_doctor      Boolean    @default(false)
+
+  state_meta Json? @default("{}")
+
+  created_at DateTime @default(now())
+
+  players GamePlayer[]
+  votes   GameVote[]
+
+  @@index([status])
+  @@index([status, room_size])
 }
 
-model StockPrice {
-  price_id     Int      @id @default(autoincrement())
-  price        Decimal  @db.Decimal(18, 4)
-  recorded_at  DateTime @default(now())
+//////////////////////
+// GAME PLAYER
+//////////////////////
 
-  stock_id     Int
-  stock        Stock    @relation(fields: [stock_id], references: [stock_id], onDelete: Cascade)
+model GamePlayer {
+  id String @id @default(cuid())
 
-  @@index([stock_id, recorded_at(sort: Desc)])
+  room_code String
+  user_id   String @db.Uuid
+
+  role   GameRole?
+  status PlayerStatus @default(ALIVE)
+
+  joined_at DateTime @default(now())
+
+  user User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  room GameRoom @relation(fields: [room_code], references: [room_code], onDelete: Cascade)
+
+  votes_cast     GameVote[] @relation("VotesCast")
+  votes_received GameVote[] @relation("VotesReceived")
+
+  @@unique([room_code, user_id])
+  @@index([room_code])
+  @@index([room_code, status])
 }
 
-model UserPortfolio {
-  user_id       String   @db.Uuid
-  stock_id      Int
-  shares_owned  Decimal  @default(0) @db.Decimal(18, 6)
-  avg_buy_price Decimal  @default(0) @db.Decimal(18, 4)
+//////////////////////
+// GAME VOTE
+//////////////////////
 
-  user          User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-  stock         Stock    @relation(fields: [stock_id], references: [stock_id], onDelete: Cascade)
+model GameVote {
+  id String @id @default(cuid())
 
-  @@id([user_id, stock_id])
-  @@index([user_id])
-}
+  room_code String
+  round     Int
 
-model TradeTransaction {
-  transaction_id  Int      @id @default(autoincrement())
-  trade           TradeType
-  shares          Decimal  @db.Decimal(18, 6)
-  price_per_share Decimal  @db.Decimal(18, 4)
-  executed_at     DateTime @default(now())
+  voter_id  String
+  target_id String?
 
-  user_id         String   @db.Uuid
-  stock_id        Int
+  vote_type   VoteType @default(DAY_LYNCH)
+  target_meta Json?
 
-  user            User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-  stock           Stock    @relation(fields: [stock_id], references: [stock_id], onDelete: Cascade)
+  created_at DateTime @default(now())
 
-  @@index([user_id, executed_at(sort: Desc)])
+  room   GameRoom    @relation(fields: [room_code], references: [room_code], onDelete: Cascade)
+  voter  GamePlayer  @relation("VotesCast", fields: [voter_id], references: [id], onDelete: Cascade)
+  target GamePlayer? @relation("VotesReceived", fields: [target_id], references: [id], onDelete: Cascade)
+
+  @@unique([room_code, round, voter_id, vote_type])
+  @@index([room_code, round])
+  @@index([room_code, vote_type])
+  @@index([voter_id])
+  @@index([target_id])
 }
