@@ -17,21 +17,30 @@ enum ClubType {
 }
 
 model User {
-  user_id         String   @id @default(uuid()) @db.Uuid
+  user_id         String    @id @default(uuid()) @db.Uuid
+  clerk_id        String    @unique                          // Clerk user ID (e.g. user_2abc...)
   full_name       String
-  email           String   @unique
-  google_id       String   @unique
-  virtual_balance Decimal  @default(10000.00) @db.Decimal(18, 2)
-  created_at      DateTime @default(now())
+  email           String    @unique
+  virtual_balance Decimal   @default(10000.00) @db.Decimal(18, 2)
+  created_at      DateTime  @default(now())
 
   portfolio       UserPortfolio[]
   trades          TradeTransaction[]
 }
 
+model CoreTeamMember {
+  id        Int      @id @default(autoincrement())
+  name      String
+  role      String
+  image_url String?
+  linkedin  String?
+  created_at DateTime @default(now())
+}
+
 model Club {
   club_id     Int      @id @default(autoincrement())
   club_name   String   @unique
-  club_type   ClubType
+  club_type   ClubType @default(DEPARTMENTAL)
   department  String?
   created_at  DateTime @default(now())
 

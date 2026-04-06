@@ -1,0 +1,19 @@
+﻿node.exe : Loaded Prisma config from 
+prisma.config.ts.
+At C:\Program Files\nodejs\npx.ps1:29 char:3
++   & $NODE_EXE $NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: 
+    (Loaded Prisma c...isma.config.ts.:Str  
+  ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommand 
+   Error
+ 
+
+Prisma schema loaded from 
+prisma\schema.prisma.
+Datasource "db": PostgreSQL database "nimbus_2k26", schema "public" at "dpg-d73d7d63jp1c73e0iofg-a.singapore-postgres.render.com"
+
+5 migrations found in prisma/migrations
+
+Database schema is up to date!

@@ -13,7 +13,7 @@ const sendResponse = (res, status, message, data = null, meta = null) => {
 };
 
 
-module.exports = { sendResponse };
+export { sendResponse };
 
 // usage Example:
 // instead of 

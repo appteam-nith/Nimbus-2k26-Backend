@@ -16,22 +16,31 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node test/api-test.js",
+    "test:local": "node test/api-test.js --local",
+    "test:auth": "node test/auth-debug.js",
+    "test:auth:local": "node test/auth-debug.js --local"
   },
   "dependencies": {
+    "@clerk/express": "^2.0.7",
     "@neondatabase/serverless": "^1.0.2",
+    "@prisma/adapter-neon": "^7.3.0",
     "@prisma/adapter-pg": "^7.3.0",
-    "@prisma/client": "^7.3.0",
+    "@prisma/client": "^7.4.0",
     "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "deep-email-validator": "^0.1.21",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "google-auth-library": "^10.5.0",
     "jsonwebtoken": "^9.0.3",
-    "nodemon": "^3.1.11",
-    "pg": "^8.18.0",
-    "prisma": "^7.3.0"
+    "nodemailer": "^8.0.4",
+    "pg": "^8.17.2"
   },
   "devDependencies": {
-    "@types/pg": "^8.16.0"
+    "@types/pg": "^8.16.0",
+    "nodemon": "^3.1.11",
+    "prisma": "^7.4.0"
   }
 }

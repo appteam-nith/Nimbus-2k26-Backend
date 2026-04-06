@@ -1,0 +1,36 @@
+﻿[dotenv@17.2.3] injecting env (13) from .env -- tip: Γ£à audit secrets and track compliance: https://dotenvx.com/ops
+Checking current column state...
+node : (node:14724) Warning: SECURITY 
+WARNING: The SSL modes 'prefer', 'require', 
+and 'verify-ca' are treated as aliases for 
+'verify-full'.
+At line:1 char:1
++ node test/fix-db-drift.js 2>&1 | Out-File 
+test/fix-output.txt -Encodi ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: 
+    ((node:14724) Wa... 'verify-full'.:Str  
+  ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommand 
+   Error
+ 
+In the next major version 
+(pg-connection-string v3.0.0 and pg 
+v9.0.0), these modes will adopt standard 
+libpq semantics, which have weaker security 
+guarantees.
+
+To prepare for this change:
+- If you want the current behavior, 
+explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 
+'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/
+libpq-ssl.html for libpq SSL mode 
+definitions.
+(Use `node --trace-warnings ...` to show 
+where the warning was created)
+Current columns: user_id, full_name, email, virtual_balance, created_at, phone, clerk_id
+
+Γ£ô DB is already in the correct state. No fix needed.
