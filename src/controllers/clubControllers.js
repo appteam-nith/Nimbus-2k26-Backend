@@ -1,4 +1,4 @@
-import prisma from "../prisma.js";
+import prisma from "../config/prisma.js";
 
 const createClub = async (req, res) => {
   try {
@@ -17,19 +17,21 @@ const createClub = async (req, res) => {
         department,
       },
     });
-
+   
+    console.log("Created club:", club);
     res.status(201).json({
       success: true,
       data: club,
     });
   } catch (error) {
+    console.error("Error creating club:", error.message, "Stack:", error.stack);
     if (error.code === "P2002") {
       return res.status(409).json({
         success: false,
         message: "Club already exists",
       });
     }
-
+ 
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -37,65 +39,181 @@ const createClub = async (req, res) => {
   }
 };
 
-
-const addEvent = async (req, res) => {
+// Create Event for a Club
+const createEvent = async (req, res) => {
   try {
-    const {
-      event_name,
-      venue,
-      event_time,
-      organizing_club_id,
-      image_url,
-      extra_details,
-    } = req.body;
+    const { club_id } = req.params;
+    const { event_name, venue, image_url, extra_details, event_time } = req.body;
 
-    // basic validation
-    if (!event_name || !venue || !event_time || !organizing_club_id) {
-      return res.status(400).json({
-        success: false,
-        message: "event_name, venue, event_time and organizing_club_id are required",
-      });
+    if (!event_name || !venue || !event_time) {
+      return res.status(400).json({ error: "event_name, venue, event_time are required" });
     }
 
-    // check if club exists
-    const clubExists = await prisma.club.findUnique({
-      where: { club_id: organizing_club_id },
+    // Club exist karta hai check karo
+    const club = await prisma.club.findUnique({
+      where: { club_id: parseInt(club_id) },
     });
+    if (!club) return res.status(404).json({ error: "Club not found" });
 
-    if (!clubExists) {
-      return res.status(404).json({
-        success: false,
-        message: "Organizing club not found",
-      });
-    }
-
-    // create event
     const event = await prisma.event.create({
       data: {
         event_name,
         venue,
+        image_url: image_url || null,
+        extra_details: extra_details || null,
         event_time: new Date(event_time),
-        organizing_club_id,
-        image_url,
-        extra_details,
+        organizing_club_id: parseInt(club_id),
       },
     });
 
-    return res.status(201).json({
-      success: true,
-      data: event,
-    });
+    res.status(201).json({ message: "Event created successfully", event });
   } catch (error) {
-    console.error(error);
+    console.error("Error creating event:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
 
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
+const getClubById = async (req, res) => {
+  try {
+    const { club_id } = req.params;
+    const club = await prisma.club.findUnique({
+      where: { club_id: parseInt(club_id) },
     });
+    if (!club) return res.status(404).json({ error: "Club not found" });
+    res.status(200).json({ club });
+  } catch (error) {
+    console.error("Error fetching club:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
+// Get all Events of a Club
+const getEventsByClub = async (req, res) => {
+  try {
+    const { club_id } = req.params;
+
+    const events = await prisma.event.findMany({
+      where: { organizing_club_id: parseInt(club_id) },
+      orderBy: { event_time: "asc" },
+    });
+
+    res.status(200).json({ events });
+  } catch (error) {
+    console.error("Error fetching events:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get all Events (sab clubs ke)
+const getAllEvents = async (req, res) => {
+  try {
+    const events = await prisma.event.findMany({
+      orderBy: { event_time: "asc" },
+      include: {
+        club: {
+          select: { club_name: true, club_type: true },
+        },
+      },
+    });
+
+    res.status(200).json({ events });
+  } catch (error) {
+    console.error("Error fetching all events:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get single Event by ID
+const getEventById = async (req, res) => {
+  try {
+    const { event_id } = req.params;
+
+    const event = await prisma.event.findUnique({
+      where: { event_id: parseInt(event_id) },
+      include: {
+        club: {
+          select: { club_name: true, club_type: true, department: true },
+        },
+      },
+    });
+
+    if (!event) return res.status(404).json({ error: "Event not found" });
+
+    res.status(200).json({ event });
+  } catch (error) {
+    console.error("Error fetching event:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update Event
+const updateEvent = async (req, res) => {
+  try {
+    const { event_id } = req.params;
+    const { event_name, venue, image_url, extra_details, event_time } = req.body;
+
+    const existing = await prisma.event.findUnique({
+      where: { event_id: parseInt(event_id) },
+    });
+    if (!existing) return res.status(404).json({ error: "Event not found" });
+
+    const updated = await prisma.event.update({
+      where: { event_id: parseInt(event_id) },
+      data: {
+        ...(event_name && { event_name }),
+        ...(venue && { venue }),
+        ...(image_url !== undefined && { image_url }),
+        ...(extra_details !== undefined && { extra_details }),
+        ...(event_time && { event_time: new Date(event_time) }),
+      },
+    });
+
+    res.status(200).json({ message: "Event updated successfully", event: updated });
+  } catch (error) {
+    console.error("Error updating event:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Delete Event
+const deleteEvent = async (req, res) => {
+  try {
+    const { event_id } = req.params;
+
+    const existing = await prisma.event.findUnique({
+      where: { event_id: parseInt(event_id) },
+    });
+    if (!existing) return res.status(404).json({ error: "Event not found" });
+
+    await prisma.event.delete({
+      where: { event_id: parseInt(event_id) },
+    });
+
+    res.status(200).json({ message: "Event deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting event:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getAllClubs = async (req, res) => {
+  try {
+    const clubs = await prisma.club.findMany({ orderBy: { created_at: "desc" } });
+    res.status(200).json({ data: clubs });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
 export {
-    createClub,
-    addEvent
+  createClub,
+  createEvent,      // ✅ yeh add karo
+  getEventsByClub,
+  getAllEvents,
+  getEventById,
+  updateEvent,
+  deleteEvent,
+  getAllClubs,
+  getClubById
 }
