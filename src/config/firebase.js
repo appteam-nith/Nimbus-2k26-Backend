@@ -1,6 +1,4 @@
 import admin from "firebase-admin";
-import dotenv from "dotenv";
-dotenv.config();
 
 /**
  * Firebase Admin SDK — initialised once at startup.
@@ -18,7 +16,6 @@ dotenv.config();
  */
 if (!admin.apps.length) {
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-    
 
   if (!privateKey || !process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL) {
     throw new Error(
