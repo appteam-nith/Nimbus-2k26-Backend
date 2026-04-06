@@ -3,6 +3,7 @@ import protect from "../middlewares/authMiddleware.js";
 import {
   handleCreateRoom,
   handleJoinRoom,
+  handleLeaveRoom,
   handleGetRoom,
   handleStartGame,
   handleVote,
@@ -18,6 +19,7 @@ router.use(protect);
 // ─── ROOM ─────────────────────────────────────────────────────────────────────
 router.post("/rooms", handleCreateRoom);           // Create room
 router.post("/rooms/join", handleJoinRoom);        // Join by code
+router.post("/rooms/leave", handleLeaveRoom);      // Leave room
 router.get("/rooms/:code", handleGetRoom);         // Get room state (reconnect)
 
 // ─── GAME ─────────────────────────────────────────────────────────────────────
