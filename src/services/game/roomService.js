@@ -54,6 +54,12 @@ export async function getRoomState(roomCode, myUserId) {
       ? Math.max(0, Math.floor((new Date(room.phase_ends_at) - Date.now()) / 1000))
       : null;
 
+  const roomMeta = room.state_meta
+    ? typeof room.state_meta === "string"
+      ? JSON.parse(room.state_meta || "{}")
+      : (room.state_meta ?? {})
+    : {};
+
   return {
     roomCode: room.room_code,
     hostId: room.host_id,
@@ -66,6 +72,12 @@ export async function getRoomState(roomCode, myUserId) {
     timeRemaining,
     players,
     myRole: myPlayer?.role ?? null,
+    // ── Reconnect persistence flags ──────────────────────────────────────
+    // Whether the Nurse has successfully located the Doctor this game
+    nurseMet: room.nurse_met_doctor ?? false,
+    // Whether the Reporter has already used their one-time broadcast ability
+    // (stored in room.state_meta by resolveService)
+    reporterUsed: roomMeta.reporter_used === true,
   };
 }
 

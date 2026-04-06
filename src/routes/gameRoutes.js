@@ -9,6 +9,7 @@ import {
   handleVote,
   handleChat,
   handlePusherAuth,
+  handleListRooms,
 } from "../controllers/gameController.js";
 
 const router = Router();
@@ -17,6 +18,7 @@ const router = Router();
 router.use(protect);
 
 // ─── ROOM ─────────────────────────────────────────────────────────────────────
+router.get("/rooms", handleListRooms);             // List open lobby rooms
 router.post("/rooms", handleCreateRoom);           // Create room
 router.post("/rooms/join", handleJoinRoom);        // Join by code
 router.post("/rooms/leave", handleLeaveRoom);      // Leave room
