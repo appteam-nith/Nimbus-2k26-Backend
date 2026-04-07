@@ -154,10 +154,22 @@ app.get("/delete-account", (_req, res) => {
 </html>`);
 });
 
+// ── API ROUTES ───────────────────────────────────────────────────────────────
+
+import clubRoutes from "./routes/clubsRoute.js";
+app.use("/api/clubs", clubRoutes);
+
+import eventRoute from "./routes/eventRoute.js";
+import projectRoute from "./routes/projectRoute.js";
+
+app.use("/api/events", eventRoute);
+app.use("/api/projects", projectRoute);
+
 app.use("/api/users", UserRoutes);
 app.use("/api/coreteam", CoreTeamRoutes);
-app.use("/api/events", EventRoutes);
+
 app.use("/api/game", GameRoutes);
+
 
 app.use(errorHandler);
 

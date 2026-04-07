@@ -34,6 +34,31 @@ const VOTE_TYPE_ROLE = {
 // Hitman early lockout — actions lock at T-5s before night end
 const HITMAN_LOCKOUT_MS = 5_000;
 
+// ─── LIST OPEN ROOMS ─────────────────────────────────────────────────────────
+
+export const handleListRooms = async (req, res) => {
+  try {
+    const rooms = await prisma.gameRoom.findMany({
+      where: { status: "LOBBY" },
+      include: { _count: { select: { players: true } } },
+      orderBy: { created_at: "desc" },
+      take: 20,
+    });
+
+    const list = rooms.map((r) => ({
+      roomCode: r.room_code,
+      roomSize: r.room_size,
+      playerCount: r._count.players,
+      maxPlayers: { FIVE: 5, EIGHT: 8, TWELVE: 12 }[r.room_size] ?? 5,
+    }));
+
+    return res.status(200).json({ rooms: list });
+  } catch (err) {
+    console.error("[listRooms]", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 // ─── CREATE ROOM ──────────────────────────────────────────────────────────────
 
 export const handleCreateRoom = async (req, res) => {
@@ -47,9 +72,18 @@ export const handleCreateRoom = async (req, res) => {
 
     const code = await createRoom(userId, room_size);
 
+    // Notify the specific room channel
     await pusher.trigger(`room-${code}`, "room-created", {
       roomCode: code,
       hostId: userId,
+    });
+
+    // Notify the global rooms browser channel
+    await pusher.trigger("rooms", "room-opened", {
+      roomCode: code,
+      roomSize: room_size,
+      playerCount: 1,
+      maxPlayers: { FIVE: 5, EIGHT: 8, TWELVE: 12 }[room_size] ?? 5,
     });
 
     return res.status(201).json({ success: true, roomCode: code });
@@ -80,6 +114,18 @@ export const handleJoinRoom = async (req, res) => {
       name: user?.full_name,
     });
 
+    // Update the global rooms browser with new player count
+    const playerCount = await prisma.gamePlayer.count({ where: { room_code: room_code } });
+    const room = await prisma.gameRoom.findUnique({ where: { room_code: room_code }, select: { room_size: true } });
+    if (room) {
+      await pusher.trigger("rooms", "room-opened", {
+        roomCode: room_code,
+        roomSize: room.room_size,
+        playerCount,
+        maxPlayers: { FIVE: 5, EIGHT: 8, TWELVE: 12 }[room.room_size] ?? 5,
+      });
+    }
+
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error("[joinRoom]", err.message);
@@ -99,11 +145,27 @@ export const handleLeaveRoom = async (req, res) => {
     const { leaveRoom } = await import("../services/game/roomService.js");
     const result = await leaveRoom(room_code, userId);
 
-    if (result && !result.deleted) {
+    if (result && result.deleted) {
+      // Room is gone — tell the browse screen
+      await pusher.trigger("rooms", "room-closed", { roomCode: room_code });
+    } else if (result && !result.deleted) {
       await pusher.trigger(`room-${room_code}`, "player-left", {
         userId,
         newHostId: result.newHostId,
       });
+      // Update player count in browse screen
+      const playerCount = await prisma.gamePlayer.count({ where: { room_code: room_code } });
+      const rm = await prisma.gameRoom.findUnique({ where: { room_code: room_code }, select: { room_size: true } });
+      if (rm && playerCount > 0) {
+        await pusher.trigger("rooms", "room-opened", {
+          roomCode: room_code,
+          roomSize: rm.room_size,
+          playerCount,
+          maxPlayers: { FIVE: 5, EIGHT: 8, TWELVE: 12 }[rm.room_size] ?? 5,
+        });
+      } else {
+        await pusher.trigger("rooms", "room-closed", { roomCode: room_code });
+      }
     }
 
     return res.status(200).json({ success: true });

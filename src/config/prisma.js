@@ -9,26 +9,44 @@ dotenv.config({ path: join(__dirname, '../../.env') });
 
 import pkg from '@prisma/client';
 const { PrismaClient } = pkg;
-
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not defined in environment variables");
-}
-
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false },
+  max: 3,
+  min: 0,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 15000,
+  allowExitOnIdle: true,
 });
 
-// Handle pool errors to prevent uncaught exceptions
-pool.on('error', (err, client) => {
-  console.error('Unexpected error on idle client', err);
-  console.error('Error stack:', err.stack);
+pool.on('error', (err) => {
+  console.error('Pool error:', err.message);
 });
 
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+
+const prisma = new PrismaClient({
+  adapter,
+  log: ['error', 'warn'],
+});
+
+async function testConnection() {
+  try {
+    await prisma.$connect();
+    console.log('✅ Database connected successfully');
+  } catch (e) {
+    console.error('❌ DB connection failed:', e.message);
+  }
+}
+testConnection();
+
+process.on('SIGINT', async () => {
+  await prisma.$disconnect();
+  await pool.end();
+  process.exit(0);
+});
 
 export default prisma;

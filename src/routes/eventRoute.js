@@ -1,16 +1,20 @@
-import { Router } from "express";
-import { getEventsByDate, getAllEvents, getEventById, createEvent } from "../controllers/eventControllers.js";
+import express from "express";
+import {
+  createEvent,
+  getEventsByClub,
+  getAllEvents,
+  getEventById,
+  updateEvent,
+  deleteEvent,
+} from "../controllers/eventControllers.js";
 
-const router = Router();
+const router = express.Router();
 
-// GET /api/events          → all events (no date filter)
-// GET /api/events?date=YYYY-MM-DD → events for that specific date
-router.get('/', getAllEvents);
-
-// GET /api/events/:id
-router.get('/:id', getEventById);
-
-// POST /api/events  (admin use — push an event from backend)
-router.post('/', createEvent);
+router.get("/", getAllEvents);
+router.get("/:event_id", getEventById);
+router.post("/club/:club_id", createEvent);
+router.put("/:event_id", updateEvent);
+router.delete("/:event_id", deleteEvent);
+router.get("/club/:club_id", getEventsByClub);
 
 export default router;

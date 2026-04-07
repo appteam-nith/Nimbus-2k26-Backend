@@ -1,7 +1,46 @@
 import prisma from "../config/prisma.js";
 
+const createClub = async (req, res) => {
+  try {
+    const { club_name, department } = req.body;
+
+    if (!club_name) {
+      return res.status(400).json({
+        success: false,
+        message: "club_name is required",
+      });
+    }
+
+    const club = await prisma.club.create({
+      data: {
+        club_name,
+        department,
+      },
+    });
+   
+    console.log("Created club:", club);
+    res.status(201).json({
+      success: true,
+      data: club,
+    });
+  } catch (error) {
+    console.error("Error creating club:", error.message, "Stack:", error.stack);
+    if (error.code === "P2002") {
+      return res.status(409).json({
+        success: false,
+        message: "Club already exists",
+      });
+    }
+ 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 // Create Event for a Club
-export const createEvent = async (req, res) => {
+const createEvent = async (req, res) => {
   try {
     const { club_id } = req.params;
     const { event_name, venue, image_url, extra_details, event_time } = req.body;
@@ -34,8 +73,23 @@ export const createEvent = async (req, res) => {
   }
 };
 
+const getClubById = async (req, res) => {
+  try {
+    const { club_id } = req.params;
+    const club = await prisma.club.findUnique({
+      where: { club_id: parseInt(club_id) },
+    });
+    if (!club) return res.status(404).json({ error: "Club not found" });
+    res.status(200).json({ club });
+  } catch (error) {
+    console.error("Error fetching club:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
 // Get all Events of a Club
-export const getEventsByClub = async (req, res) => {
+const getEventsByClub = async (req, res) => {
   try {
     const { club_id } = req.params;
 
@@ -52,7 +106,7 @@ export const getEventsByClub = async (req, res) => {
 };
 
 // Get all Events (sab clubs ke)
-export const getAllEvents = async (req, res) => {
+const getAllEvents = async (req, res) => {
   try {
     const events = await prisma.event.findMany({
       orderBy: { event_time: "asc" },
@@ -71,7 +125,7 @@ export const getAllEvents = async (req, res) => {
 };
 
 // Get single Event by ID
-export const getEventById = async (req, res) => {
+const getEventById = async (req, res) => {
   try {
     const { event_id } = req.params;
 
@@ -94,7 +148,7 @@ export const getEventById = async (req, res) => {
 };
 
 // Update Event
-export const updateEvent = async (req, res) => {
+const updateEvent = async (req, res) => {
   try {
     const { event_id } = req.params;
     const { event_name, venue, image_url, extra_details, event_time } = req.body;
@@ -123,7 +177,7 @@ export const updateEvent = async (req, res) => {
 };
 
 // Delete Event
-export const deleteEvent = async (req, res) => {
+const deleteEvent = async (req, res) => {
   try {
     const { event_id } = req.params;
 
@@ -142,3 +196,24 @@ export const deleteEvent = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+const getAllClubs = async (req, res) => {
+  try {
+    const clubs = await prisma.club.findMany({ orderBy: { created_at: "desc" } });
+    res.status(200).json({ data: clubs });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export {
+  createClub,
+  createEvent,      // ✅ yeh add karo
+  getEventsByClub,
+  getAllEvents,
+  getEventById,
+  updateEvent,
+  deleteEvent,
+  getAllClubs,
+  getClubById
+}

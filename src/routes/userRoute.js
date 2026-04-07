@@ -6,7 +6,7 @@ import {
   updateBalance,
   deleteAccount,
 } from "../controllers/usercontroller.js";
-import { getEventsByDate } from "../controllers/eventControllers.js";
+// import { getEventsByDate } from "../controllers/eventControllers.js";
 import validateDate from "../middlewares/valDateMiddleware.js";
 import protect from "../middlewares/authMiddleware.js";
 
@@ -23,6 +23,6 @@ router.delete("/profile", protect, deleteAccount);
 router.put("/balance", protect, updateBalance);
 
 // ─── EVENTS (public) ─────────────────────────────────────────────────────────
-router.get("/events", validateDate, getEventsByDate);
+// router.get("/events", validateDate, getEventsByDate);
 
 export default router;
