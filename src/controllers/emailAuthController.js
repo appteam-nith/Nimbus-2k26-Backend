@@ -75,7 +75,7 @@ export async function signUp(req, res) {
       message: "Account created! Check your inbox for a verification email. If email delivery fails, you can still log in with your email and password.",
     });
   } catch (err) {
-    console.error("[email-signup] Error:", err.message);
+    console.error("[email-signup] Error:", err.stack);
     return res.status(500).json({ error: "Sign up failed. Please try again." });
   }
 }
