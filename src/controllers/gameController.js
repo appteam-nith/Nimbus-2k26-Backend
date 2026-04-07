@@ -38,8 +38,12 @@ const HITMAN_LOCKOUT_MS = 5_000;
 
 export const handleListRooms = async (req, res) => {
   try {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const rooms = await prisma.gameRoom.findMany({
-      where: { status: "LOBBY" },
+      where: { 
+        status: "LOBBY",
+        created_at: { gte: twoHoursAgo }
+      },
       include: { _count: { select: { players: true } } },
       orderBy: { created_at: "desc" },
       take: 20,
@@ -383,6 +387,9 @@ export const handleVote = async (req, res) => {
         targetUserId: target_id,
         result,
       });
+
+      // Also return in HTTP response as belt-and-suspenders
+      return res.status(200).json({ success: true, investigation_result: result });
     }
 
     // ── Nurse action — instant private feedback ─────────────────────────────
@@ -414,13 +421,40 @@ export const handleVote = async (req, res) => {
         targetUserId: target_id,
         role: targetPlayer?.role,
       });
+
+      // Also return in HTTP response
+      return res.status(200).json({ success: true, investigation_result: targetPlayer?.role });
     }
 
-    // Broadcast that a vote was cast (not who — just that someone did)
-    await pusher.trigger(`game-${room_code}`, "vote-updated", {
+    // ── Broadcast vote-updated with tally (for DAY_LYNCH) ────────────────────
+    const broadcastPayload = {
       voterId,
       voteType: vote_type,
-    });
+    };
+
+    // Include vote tally for DAY_LYNCH so clients can show live vote counts
+    if (vote_type === "DAY_LYNCH") {
+      const { tallyDayVotes } = await import("../services/game/voteService.js");
+      const tally = await tallyDayVotes(room_code, room.round);
+
+      // Convert GamePlayer.id keys to user_id keys for frontend
+      const playerIdToUserId = {};
+      const allPlayers = await prisma.gamePlayer.findMany({
+        where: { room_code },
+        select: { id: true, user_id: true },
+      });
+      for (const p of allPlayers) {
+        playerIdToUserId[p.id] = p.user_id;
+      }
+      const userTally = {};
+      for (const [playerId, count] of Object.entries(tally)) {
+        const uid = playerIdToUserId[playerId] || playerId;
+        userTally[uid] = count;
+      }
+      broadcastPayload.tally = userTally;
+    }
+
+    await pusher.trigger(`game-${room_code}`, "vote-updated", broadcastPayload);
 
     return res.status(200).json({ success: true });
   } catch (err) {

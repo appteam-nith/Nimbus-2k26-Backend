@@ -69,6 +69,10 @@ export async function getRoomState(roomCode, myUserId) {
       ? Math.max(0, Math.floor((new Date(room.phase_ends_at) - Date.now()) / 1000))
       : null;
 
+  const bountyVipPlayer = room.players.find(
+    (p) => p.id === roomMeta.bounty_vip_player_id
+  );
+
   return {
     roomCode: room.room_code,
     hostId: room.host_id,
@@ -85,6 +89,7 @@ export async function getRoomState(roomCode, myUserId) {
     nurseMet: room.nurse_met_doctor ?? false,
     reporterUsed: roomMeta.reporter_used === true,
     hitmanMetMafia: roomMeta.hitman_met_mafia === true,
+    bountyVipUserId: bountyVipPlayer?.user_id || null,
     devMode: isDevMode,
   };
 }
