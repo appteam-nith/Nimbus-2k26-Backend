@@ -181,6 +181,7 @@ model GamePlayer {
 
   role   GameRole?
   status PlayerStatus @default(ALIVE)
+  isBot  Boolean @default(false)
 
   joined_at DateTime @default(now())
 

@@ -197,11 +197,11 @@ export const handleGetRoom = async (req, res) => {
 export const handleStartGame = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { room_code } = req.body;
+    const { room_code, dev_mode } = req.body;
 
     if (!room_code) return res.status(400).json({ error: "room_code is required" });
 
-    await startGame(room_code, userId);
+    await startGame(room_code, userId, dev_mode);
 
     return res.status(200).json({ success: true });
   } catch (err) {

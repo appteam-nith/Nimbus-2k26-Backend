@@ -1,4 +1,4 @@
-import prisma from "../../config/prisma.js";
+import { randomUUID } from 'crypto';
 import pusher from "../../config/pusher.js";
 import { buildRoleAssignments, validateRoomSize } from "./roleService.js";
 import { getAlivePlayers, ROOM_SIZE_LIMITS } from "./roomService.js";
@@ -11,7 +11,7 @@ import { PHASE_DURATION } from "./resolveService.js";
  *   3. Sets status → NIGHT, starts timer
  *   4. Broadcasts game-started + sends each player their role privately
  */
-export async function startGame(roomCode, hostUserId) {
+export async function startGame(roomCode, hostUserId, devMode = false) {
   const room = await prisma.gameRoom.findUnique({
     where: { room_code: roomCode },
     include: { players: true },
@@ -23,17 +23,63 @@ export async function startGame(roomCode, hostUserId) {
   if (room.status !== "LOBBY")
     throw Object.assign(new Error("Game is already in progress"), { status: 409 });
 
-  const playerCount = room.players.length;
-  const roomSizeEnum = validateRoomSize(playerCount);
-  if (!roomSizeEnum) {
-    throw Object.assign(
-      new Error(`Player count ${playerCount} is invalid. Must be 5, 8, or 12.`),
-      { status: 400 }
-    );
+  let playerCount = room.players.length;
+  let players = room.players;
+
+  // In dev mode, fill with bots to reach 5 players if needed
+  if (devMode && playerCount < 5) {
+    const botsNeeded = 5 - playerCount;
+    const roomSizeEnum = "FIVE"; // Always use 5-player setup in dev mode
+
+    // Create bot players
+    for (let i = 0; i < botsNeeded; i++) {
+      const botUserId = randomUUID();
+      const botName = `Bot ${i + 1}`;
+
+      // Create bot user if it doesn't exist
+      await prisma.user.upsert({
+        where: { user_id: botUserId },
+        update: {},
+        create: {
+          user_id: botUserId,
+          full_name: botName,
+          email: `${botUserId}@bot.local`,
+        },
+      });
+
+      // Add bot to room
+      await prisma.gamePlayer.create({
+        data: {
+          room_code: roomCode,
+          user_id: botUserId,
+          isBot: true,
+        },
+      });
+    }
+
+    // Refresh players list including bots
+    const updatedRoom = await prisma.gameRoom.findUnique({
+      where: { room_code: roomCode },
+      include: { players: true },
+    });
+    players = updatedRoom.players;
+    playerCount = players.length;
+  } else if (!devMode) {
+    // Normal validation for non-dev mode
+    const roomSizeEnum = validateRoomSize(playerCount);
+    if (!roomSizeEnum) {
+      throw Object.assign(
+        new Error(`Player count ${playerCount} is invalid. Must be 5, 8, or 12.`),
+        { status: 400 }
+      );
+    }
   }
 
+  // For dev mode, always use 5-player setup
+  const roomSizeEnum = devMode ? "FIVE" : validateRoomSize(playerCount);
+
   // Assign roles
-  const assignments = buildRoleAssignments(room.players, roomSizeEnum);
+  const assignments = buildRoleAssignments(players, roomSizeEnum);
 
   // Write roles + update room in one transaction
   const phaseEndsAt = new Date(Date.now() + PHASE_DURATION.NIGHT);
@@ -77,13 +123,13 @@ export async function startGame(roomCode, hostUserId) {
   });
 
   // Send each player their own role privately
-  const players = await prisma.gamePlayer.findMany({
+  const gamePlayers = await prisma.gamePlayer.findMany({
     where: { room_code: roomCode },
     select: { user_id: true, role: true },
   });
 
   await Promise.all(
-    players.map((p) =>
+    gamePlayers.map((p) =>
       pusher.trigger(`private-${p.user_id}`, "role-assigned", {
         roomCode,
         role: p.role,
