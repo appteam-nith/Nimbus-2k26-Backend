@@ -74,11 +74,13 @@ enum VoteType {
 //////////////////////
 
 model User {
-  user_id    String   @id @default(uuid()) @db.Uuid
-  google_id  String?  @unique
-  full_name  String
-  email      String   @unique
-  created_at DateTime @default(now())
+  user_id       String   @id @default(uuid()) @db.Uuid
+  google_id     String?  @unique
+  full_name     String
+  email         String   @unique
+  password_hash String?  // null for Google OAuth users
+  is_verified   Boolean  @default(false) // true for Google users; email users must verify
+  created_at    DateTime @default(now())
 
   game_players GamePlayer[]
   hosted_rooms GameRoom[]   @relation("RoomHost")

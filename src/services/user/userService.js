@@ -11,7 +11,7 @@ const upsertGoogleUser = async (googleId, name, email) => {
   if (user) {
     return prisma.user.update({
       where: { google_id: googleId },
-      data: { full_name: name, email },
+      data: { full_name: name, email, is_verified: true },
       select: { user_id: true, google_id: true, full_name: true, email: true },
     });
   }
@@ -24,13 +24,13 @@ const upsertGoogleUser = async (googleId, name, email) => {
   if (existingByEmail) {
     return prisma.user.update({
       where: { email },
-      data: { google_id: googleId, full_name: name },
+      data: { google_id: googleId, full_name: name, is_verified: true },
       select: { user_id: true, google_id: true, full_name: true, email: true },
     });
   }
 
   return prisma.user.create({
-    data: { google_id: googleId, full_name: name, email },
+    data: { google_id: googleId, full_name: name, email, is_verified: true },
     select: { user_id: true, google_id: true, full_name: true, email: true },
   });
 };
