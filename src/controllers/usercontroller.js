@@ -3,7 +3,7 @@ import {
   updateUser,
   deleteUser,
 } from "../services/user/userService.js";
-import admin from "../config/firebase.js";
+// import admin from "../config/firebase.js";
 
 // ─── PROTECTED PROFILE ────────────────────────────────────────────────────────
 // All routes below require the JWT issued after Google sign-in.
@@ -54,7 +54,12 @@ const deleteAccount = async (req, res) => {
     // Revoke Firebase account so the Google token is also invalidated
     if (existing.google_id) {
       try {
-        await admin.auth().deleteUser(existing.google_id);
+        // Skip Firebase deletion in development without Firebase config
+        if (process.env.NODE_ENV === 'development' && !process.env.FIREBASE_PROJECT_ID) {
+          console.warn('⚠️  Skipping Firebase user deletion for development');
+        } else {
+          await admin.auth().deleteUser(existing.google_id);
+        }
       } catch (_) {
         // Non-fatal: Firebase user may already be gone
       }

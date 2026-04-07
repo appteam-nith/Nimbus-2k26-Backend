@@ -1,4 +1,4 @@
-import admin from "../config/firebase.js";
+// import admin from "../config/firebase.js";
 import { upsertGoogleUser } from "../services/user/userService.js";
 import generateToken from "../services/generateTokenService.js";
 import { isAllowedCollegeEmail, normalizeEmail } from "../utils/authEmail.js";
@@ -21,10 +21,22 @@ const googleAuth = async (req, res) => {
     if (!idToken)
       return res.status(400).json({ error: "idToken is required" });
 
-    // Verify the Firebase ID token
+    // Verify the Firebase ID token (mock for development)
     let decoded;
     try {
-      decoded = await admin.auth().verifyIdToken(idToken);
+      // In development without Firebase, create a mock token
+      if (process.env.NODE_ENV === 'development' && !process.env.FIREBASE_PROJECT_ID) {
+        // Mock token for development testing
+        decoded = {
+          uid: 'dev-user-' + Date.now(),
+          email: 'dev@example.com',
+          name: 'Dev User',
+          email_verified: true,
+        };
+        console.warn('⚠️  Using mock Firebase token for development');
+      } else {
+        decoded = await admin.auth().verifyIdToken(idToken);
+      }
     } catch (tokenErr) {
       console.error("Firebase token verification failed:", tokenErr.message);
       return res.status(401).json({ error: "Invalid or expired Firebase ID token" });

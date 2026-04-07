@@ -171,8 +171,9 @@ app.listen(PORT, () => {
   console.log("[heartbeat] Game loop started (1s interval)");
 
   // ─── PUSHER TEST TRIGGER ────────────────────────────────────────────────────
-  pusher.trigger("my-channel", "my-event", {
-    message: "hello world"
-  }).then(() => console.log("[pusher] Test event sent to my-channel!"))
-    .catch(e => console.error("[pusher] Error sending test event:", e));
+  // Temporarily disabled for testing
+  // pusher.trigger("my-channel", "my-event", {
+  //   message: "hello world"
+  // }).then(() => console.log("[pusher] Test event sent to my-channel!"))
+  //   .catch(e => console.error("[pusher] Error sending test event:", e));
 });

@@ -44,6 +44,7 @@ export async function getRoomState(roomCode, myUserId) {
     userId: p.user_id,
     name: p.user.full_name,
     status: p.status,
+    isBot: p.isBot,
     // Only reveal role to the player themselves (or if game ended)
     role: p.user_id === myUserId || room.status === "ENDED" ? p.role : undefined,
   }));
