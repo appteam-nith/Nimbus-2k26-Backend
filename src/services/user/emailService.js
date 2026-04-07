@@ -5,7 +5,7 @@ import { Resend } from 'resend';
 const resend = new Resend(process.env.RESEND_API_KEY || 're_xxxxxxxxx');
 
 const BACKEND_URL =
-  process.env.BACKEND_URL || "https://nimbus-2k26-backend-2.onrender.com";
+  process.env.BACKEND_URL || "https://nimbus-2k26-backend-olhw.onrender.com";
 
 /** Styled HTML wrapper shared by all emails */
 function wrapHtml(title, body) {
