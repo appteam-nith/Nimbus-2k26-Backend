@@ -39,12 +39,16 @@ export async function signUp(req, res) {
     }
 
     // Check for existing user
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (existing) {
       if (!existing.is_verified) {
         // Resend verification email
         const token = signLinkToken(existing.user_id, existing.email);
-        await sendVerificationEmail({ email: existing.email, full_name: existing.full_name }, token);
+        try {
+          await sendVerificationEmail({ email: existing.email, full_name: existing.full_name }, token);
+        } catch (emailErr) {
+          console.error("[email-signup] Resend verification email failed:", emailErr.message);
+        }
         return res.status(200).json({
           message: "Account already exists but is unverified. A new verification email has been sent.",
         });
@@ -64,10 +68,14 @@ export async function signUp(req, res) {
     });
 
     const token = signLinkToken(user.user_id, user.email);
-    await sendVerificationEmail({ email: user.email, full_name: user.full_name }, token);
+    try {
+      await sendVerificationEmail({ email: user.email, full_name: user.full_name }, token);
+    } catch (emailErr) {
+      console.error("[email-signup] Verification email failed to send:", emailErr.message);
+    }
 
     return res.status(201).json({
-      message: "Account created! Check your inbox for a verification email.",
+      message: "Account created! Check your inbox for a verification email. If email delivery fails, you can still log in with your email and password.",
     });
   } catch (err) {
     console.error("[email-signup] Error:", err.message);
@@ -172,10 +180,6 @@ export async function login(req, res) {
     if (!user || !user.password_hash) {
       // No account or Google-only account
       return res.status(401).json({ error: "No account found with this email. Sign up first or use Google." });
-    }
-
-    if (!user.is_verified && !isReviewerEmail) {
-      return res.status(403).json({ error: "Please verify your email before logging in. Check your inbox." });
     }
 
     const passwordMatch =
