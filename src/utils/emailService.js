@@ -77,7 +77,7 @@ const sendPasswordResetEmail = async (toEmail, resetToken) => {
  */
 const sendOtpEmail = async (toEmail, otp) => {
   await resend.emails.send({
-    from: process.env.EMAIL_USER || 'onboarding@resend.dev',
+    from: 'onboarding@resend.dev',
     to: toEmail,
     subject: "Your Registration OTP — Nimbus 2k26",
     html: `
