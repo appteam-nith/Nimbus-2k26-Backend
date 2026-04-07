@@ -40,13 +40,27 @@ export async function getRoomState(roomCode, myUserId) {
 
   if (!room) return null;
 
+  const roomMeta = room.state_meta
+    ? typeof room.state_meta === "string"
+      ? JSON.parse(room.state_meta || "{}")
+      : (room.state_meta ?? {})
+    : {};
+
+  const isDevMode = roomMeta.dev_mode === true;
+  const bots = Array.isArray(roomMeta.bots) ? roomMeta.bots : [];
+
   const players = room.players.map((p) => ({
     userId: p.user_id,
     name: p.user.full_name,
     status: p.status,
+    // In dev mode only the HOST sees everyone's role; players only see their own
+    role:
+      (isDevMode && myUserId === room.host_id) ||
+      p.user_id === myUserId ||
+      room.status === "ENDED"
+        ? p.role
+        : undefined,
     isBot: p.isBot,
-    // Only reveal role to the player themselves (or if game ended)
-    role: p.user_id === myUserId || room.status === "ENDED" ? p.role : undefined,
   }));
 
   const myPlayer = room.players.find((p) => p.user_id === myUserId);
@@ -54,12 +68,6 @@ export async function getRoomState(roomCode, myUserId) {
     room.phase_ends_at
       ? Math.max(0, Math.floor((new Date(room.phase_ends_at) - Date.now()) / 1000))
       : null;
-
-  const roomMeta = room.state_meta
-    ? typeof room.state_meta === "string"
-      ? JSON.parse(room.state_meta || "{}")
-      : (room.state_meta ?? {})
-    : {};
 
   return {
     roomCode: room.room_code,
@@ -74,11 +82,9 @@ export async function getRoomState(roomCode, myUserId) {
     players,
     myRole: myPlayer?.role ?? null,
     // ── Reconnect persistence flags ──────────────────────────────────────
-    // Whether the Nurse has successfully located the Doctor this game
     nurseMet: room.nurse_met_doctor ?? false,
-    // Whether the Reporter has already used their one-time broadcast ability
-    // (stored in room.state_meta by resolveService)
     reporterUsed: roomMeta.reporter_used === true,
+    devMode: isDevMode,
   };
 }
 
