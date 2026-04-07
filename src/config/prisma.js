@@ -37,10 +37,23 @@ async function testConnection() {
   try {
     await prisma.$connect();
     console.log('✅ Database connected successfully');
+    await ensureIsVerifiedColumn();
   } catch (e) {
     console.error('❌ DB connection failed:', e.message);
   }
 }
+
+async function ensureIsVerifiedColumn() {
+  try {
+    await pool.query(
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "is_verified" BOOLEAN DEFAULT FALSE;',
+    );
+    console.log('✅ Ensured User.is_verified column exists');
+  } catch (e) {
+    console.error('❌ Failed to ensure User.is_verified column:', e.message);
+  }
+}
+
 testConnection();
 
 process.on('SIGINT', async () => {
