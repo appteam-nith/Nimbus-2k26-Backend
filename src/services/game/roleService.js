@@ -22,10 +22,8 @@ const ROLE_CONFIG = {
       MAFIA: 1,
       DOCTOR: 1,
       COP: 1,
-      CITIZEN: 1, // plain citizen fills the 5th slot
     },
-    // 1 special citizen role picked randomly each game
-    randomPool: { roles: ["BOUNTY_HUNTER", "PROPHET", "REPORTER"], pick: 1 },
+    randomPool: { roles: ["BOUNTY_HUNTER", "PROPHET", "REPORTER"], pick: 2 },
   },
 
   EIGHT: {
@@ -86,7 +84,7 @@ function pickRandom(arr, n) {
  * Returns a map of { playerId → GameRole }.
  * Does NOT write to DB — caller handles the transaction.
  */
-export function buildRoleAssignments(players, roomSize, bots = []) {
+export function buildRoleAssignments(players, roomSize) {
   const config = ROLE_CONFIG[roomSize];
   if (!config) throw new Error(`Unknown room size: ${roomSize}`);
 
@@ -103,36 +101,7 @@ export function buildRoleAssignments(players, roomSize, bots = []) {
     rolePool.push(...picked);
   }
 
-  if (bots.length > 0) {
-    // Dev mode: bots are already seeded with MAFIA role in DB.
-    // Remove as many MAFIA slots as possible from the pool so real players
-    // get the remaining non-MAFIA (or leftover MAFIA) roles.
-    let mafiaToRemove = bots.length;
-    const devPool = rolePool.filter((r) => {
-      if (r === "MAFIA" && mafiaToRemove > 0) {
-        mafiaToRemove--;
-        return false;
-      }
-      return true;
-    });
 
-    // devPool may be larger than players.length when bots < MAFIA count in pool,
-    // or smaller if bots exceed available MAFIA slots (shouldn't happen with balanced
-    // configs, but guard anyway).
-    if (devPool.length < players.length) {
-      throw new Error(
-        `Not enough non-MAFIA roles (${devPool.length}) for ${players.length} real players in dev mode`
-      );
-    }
-
-    // Shuffle and take exactly as many roles as there are real players
-    shuffle(devPool);
-    const assignments = {};
-    players.forEach((p, idx) => {
-      assignments[p.id] = devPool[idx];
-    });
-    return assignments;
-  }
 
   if (rolePool.length !== players.length) {
     throw new Error(

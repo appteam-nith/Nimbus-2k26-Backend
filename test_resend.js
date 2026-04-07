@@ -17,7 +17,7 @@ async function testEmail() {
     const resend = new Resend(apiKey);
     
     // Using default onboarding email if no specific custom from domain is verified
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    const fromEmail = 'onboarding@resend.dev';
     const toEmail = 'abpb2007@gmail.com'; 
     
     console.log(`Sending test email from ${fromEmail} to ${toEmail}...`);
