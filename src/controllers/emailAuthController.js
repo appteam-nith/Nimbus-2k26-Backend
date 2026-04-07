@@ -42,13 +42,11 @@ export async function signUp(req, res) {
     const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (existing) {
       if (!existing.is_verified) {
-        // Resend verification email
+        // Resend verification email (fire-and-forget)
         const token = signLinkToken(existing.user_id, existing.email);
-        try {
-          await sendVerificationEmail({ email: existing.email, full_name: existing.full_name }, token);
-        } catch (emailErr) {
+        sendVerificationEmail({ email: existing.email, full_name: existing.full_name }, token).catch((emailErr) => {
           console.error("[email-signup] Resend verification email failed:", emailErr.message);
-        }
+        });
         return res.status(200).json({
           message: "Account already exists but is unverified. A new verification email has been sent.",
         });
@@ -68,11 +66,10 @@ export async function signUp(req, res) {
     });
 
     const token = signLinkToken(user.user_id, user.email);
-    try {
-      await sendVerificationEmail({ email: user.email, full_name: user.full_name }, token);
-    } catch (emailErr) {
+    // Fire-and-forget email delivery. Doesn't block the HTTP response.
+    sendVerificationEmail({ email: user.email, full_name: user.full_name }, token).catch((emailErr) => {
       console.error("[email-signup] Verification email failed to send:", emailErr.message);
-    }
+    });
 
     return res.status(201).json({
       message: "Account created! Check your inbox for a verification email. If email delivery fails, you can still log in with your email and password.",
@@ -227,7 +224,9 @@ export async function forgotPassword(req, res) {
     // Silently succeed even if user not found (prevents email enumeration)
     if (user && user.password_hash) {
       const token = signLinkToken(user.user_id, user.email, "1h");
-      await sendPasswordResetEmail({ email: user.email, full_name: user.full_name }, token);
+      sendPasswordResetEmail({ email: user.email, full_name: user.full_name }, token).catch(err => {
+        console.error("[forgot-password] Email failed to send:", err.message);
+      });
     }
 
     return res.status(200).json({ message: "If an account with that email exists, a reset link has been sent." });

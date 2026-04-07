@@ -11,6 +11,9 @@ function createTransporter() {
       user: process.env.MAIL_USER,
       pass: process.env.MAIL_PASS,
     },
+    // Set a 5-second timeout so it fails quickly if ports are blocked locally
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
   });
 }
 
