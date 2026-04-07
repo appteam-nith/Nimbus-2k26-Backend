@@ -15,7 +15,7 @@ function createTransporter() {
 }
 
 const BACKEND_URL =
-  process.env.BACKEND_URL || "https://nimbus-2k26-backend-olhw.onrender.com";
+  process.env.BACKEND_URL || "https://nimbus-2k26-backend-2.onrender.com";
 
 /** Styled HTML wrapper shared by all emails */
 function wrapHtml(title, body) {
