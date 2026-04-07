@@ -34,9 +34,9 @@
     "express": "^5.2.1",
     "firebase-admin": "^13.7.0",
     "jsonwebtoken": "^9.0.3",
-    "nodemailer": "^8.0.4",
     "pg": "^8.17.2",
-    "pusher": "^5.3.3"
+    "pusher": "^5.3.3",
+    "resend": "^6.10.0"
   },
   "devDependencies": {
     "@types/pg": "^8.16.0",
