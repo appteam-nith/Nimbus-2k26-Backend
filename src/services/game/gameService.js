@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
+import prisma from "../../config/prisma.js";
 import pusher from "../../config/pusher.js";
 import { buildRoleAssignments, validateRoomSize } from "./roleService.js";
-import { getAlivePlayers } from "./roomService.js";
 import { PHASE_DURATION } from "./resolveService.js";
 
 /**
@@ -144,7 +144,8 @@ export async function startGame(roomCode, hostUserId, devMode = false) {
     ? Object.fromEntries(gamePlayers.map((p) => [p.user_id, p.role]))
     : null;
 
-  // Send each real player their own role privately
+  // Send each real player their own role privately.
+  // In dev mode the HOST also receives allRoles so the role-board overlay works.
   const realGamePlayersForPusher = gamePlayers.filter((p) => !p.isBot);
 
   await Promise.all(
@@ -153,7 +154,8 @@ export async function startGame(roomCode, hostUserId, devMode = false) {
         roomCode,
         role: p.role,
         devMode,
-        ...(devMode ? { allRoles } : {}),
+        // Only include the full role map for the host
+        ...(devMode && p.user_id === hostUserId ? { allRoles } : {}),
       })
     )
   );

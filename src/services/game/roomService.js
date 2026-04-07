@@ -53,7 +53,13 @@ export async function getRoomState(roomCode, myUserId) {
     userId: p.user_id,
     name: p.user.full_name,
     status: p.status,
-    role: isDevMode || p.user_id === myUserId || room.status === "ENDED" ? p.role : undefined,
+    // In dev mode only the HOST sees everyone's role; players only see their own
+    role:
+      (isDevMode && myUserId === room.host_id) ||
+      p.user_id === myUserId ||
+      room.status === "ENDED"
+        ? p.role
+        : undefined,
     isBot: p.isBot,
   }));
 

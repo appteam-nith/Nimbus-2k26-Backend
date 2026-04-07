@@ -104,8 +104,9 @@ export function buildRoleAssignments(players, roomSize, bots = []) {
   }
 
   if (bots.length > 0) {
-    // Dev mode: remove one MAFIA slot per bot from the pool
-    // (bots are already assigned MAFIA by the caller)
+    // Dev mode: bots are already seeded with MAFIA role in DB.
+    // Remove as many MAFIA slots as possible from the pool so real players
+    // get the remaining non-MAFIA (or leftover MAFIA) roles.
     let mafiaToRemove = bots.length;
     const devPool = rolePool.filter((r) => {
       if (r === "MAFIA" && mafiaToRemove > 0) {
@@ -115,12 +116,16 @@ export function buildRoleAssignments(players, roomSize, bots = []) {
       return true;
     });
 
-    if (devPool.length !== players.length) {
+    // devPool may be larger than players.length when bots < MAFIA count in pool,
+    // or smaller if bots exceed available MAFIA slots (shouldn't happen with balanced
+    // configs, but guard anyway).
+    if (devPool.length < players.length) {
       throw new Error(
-        `Dev role pool size ${devPool.length} does not match real player count ${players.length}`
+        `Not enough non-MAFIA roles (${devPool.length}) for ${players.length} real players in dev mode`
       );
     }
 
+    // Shuffle and take exactly as many roles as there are real players
     shuffle(devPool);
     const assignments = {};
     players.forEach((p, idx) => {
