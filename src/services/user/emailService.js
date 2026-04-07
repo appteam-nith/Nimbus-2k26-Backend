@@ -1,17 +1,15 @@
 import nodemailer from "nodemailer";
 
 /**
- * Creates a Nodemailer transporter using the Brevo SMTP credentials in .env.
- * Env vars required: EMAIL_USER, EMAIL_PASS, SMTP_HOST, SMTP_PORT
+ * Creates a Nodemailer transporter using Gmail credentials in .env.
+ * Env vars required: MAIL_USER, MAIL_PASS
  */
 function createTransporter() {
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp-relay.brevo.com",
-    port: parseInt(process.env.SMTP_PORT || "2525", 10),
-    secure: false,
+    service: 'gmail',
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user: process.env.MAIL_USER,
+      pass: process.env.MAIL_PASS,
     },
   });
 }
@@ -99,7 +97,7 @@ export async function sendVerificationEmail(user, token) {
 
   const transporter = createTransporter();
   await transporter.sendMail({
-    from: `"Nimbus 2k26" <${process.env.EMAIL_USER}>`,
+    from: `"Nimbus 2k26" <${process.env.MAIL_USER}>`,
     to: user.email,
     subject: "Verify your Nimbus 2k26 account",
     html: wrapHtml("Verify Your Email", body),
@@ -128,7 +126,7 @@ export async function sendPasswordResetEmail(user, token) {
 
   const transporter = createTransporter();
   await transporter.sendMail({
-    from: `"Nimbus 2k26" <${process.env.EMAIL_USER}>`,
+    from: `"Nimbus 2k26" <${process.env.MAIL_USER}>`,
     to: user.email,
     subject: "Reset your Nimbus 2k26 password",
     html: wrapHtml("Reset Password", body),
