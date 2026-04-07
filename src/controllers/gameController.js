@@ -481,6 +481,14 @@ export const handleChat = async (req, res) => {
         return res.status(403).json({ error: "Nurse has not met the Doctor yet" });
       }
       targetChannel = `private-doc-${room_code}`;
+    } else if (channel === "citizen") {
+      if (room.status !== "NIGHT") {
+        return res.status(409).json({ error: "Citizen chat is only available during NIGHT" });
+      }
+      if (player.role !== "CITIZEN") {
+        return res.status(403).json({ error: "Only Citizens can use this channel" });
+      }
+      targetChannel = `private-citizen-${room_code}`;
     } else {
       // Global chat — DISCUSSION only
       if (room.status !== "DISCUSSION") {
@@ -517,7 +525,8 @@ export const handlePusherAuth = async (req, res) => {
 
     // ── Private user channel: private-{userId} ─────────────────────────────
     if (channel.startsWith("private-") && !channel.startsWith("private-mafia-") &&
-        !channel.startsWith("private-doc-") && !channel.startsWith("private-hitman-")) {
+        !channel.startsWith("private-doc-") && !channel.startsWith("private-hitman-") && 
+        !channel.startsWith("private-citizen-")) {
       // Personal channel — only the owner
       if (!channel.includes(userId)) {
         return res.status(403).json({ error: "Cannot subscribe to another player's private channel" });
@@ -600,6 +609,22 @@ export const handlePusherAuth = async (req, res) => {
 
       if (!["HITMAN", "MAFIA"].includes(player.role)) {
         return res.status(403).json({ error: "Not authorized for hitman channel" });
+      }
+      const auth = pusher.authorizeChannel(socketId, channel);
+      return res.status(200).json(auth);
+    }
+
+    // ── Private citizen channel: private-citizen-{roomCode} ──────────────────
+    if (channel.startsWith("private-citizen-")) {
+      const roomCode = channel.replace("private-citizen-", "");
+      const player = await prisma.gamePlayer.findUnique({
+        where: { room_code_user_id: { room_code: roomCode, user_id: userId } },
+        select: { role: true },
+      });
+      if (!player) return res.status(403).json({ error: "Not in this room" });
+
+      if (player.role !== "CITIZEN") {
+        return res.status(403).json({ error: "Not authorized for citizen channel" });
       }
       const auth = pusher.authorizeChannel(socketId, channel);
       return res.status(200).json(auth);

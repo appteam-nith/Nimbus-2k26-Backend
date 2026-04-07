@@ -59,13 +59,12 @@ export async function startGame(roomCode, hostUserId, devMode = false) {
           room_code: roomCode,
           user_id: botUserId,
           isBot: true,
-          role: "MAFIA",
         },
       });
 
       bots.push({
         userId: botUserId,
-        role: "MAFIA"
+        id: botUserId // Just for easy reference
       });
     }
 
@@ -85,9 +84,15 @@ export async function startGame(roomCode, hostUserId, devMode = false) {
     }
   }
 
-  // Assign roles to real players only
-  const realPlayers = players.filter(p => !p.isBot);
-  const assignments = buildRoleAssignments(realPlayers, roomSizeEnum, devMode ? bots : []);
+  const assignments = buildRoleAssignments(players, roomSizeEnum);
+
+  if (devMode) {
+    bots = bots.map(b => ({
+      ...b,
+      // Find the bot in 'players' to get its pk ID to lookup assignment
+      role: assignments[players.find(p => p.user_id === b.userId)?.id] || null
+    }));
+  }
 
   // Write roles + update room in one transaction
   const phaseEndsAt = new Date(Date.now() + PHASE_DURATION.NIGHT);

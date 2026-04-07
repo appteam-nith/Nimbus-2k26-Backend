@@ -84,6 +84,7 @@ export async function getRoomState(roomCode, myUserId) {
     // ── Reconnect persistence flags ──────────────────────────────────────
     nurseMet: room.nurse_met_doctor ?? false,
     reporterUsed: roomMeta.reporter_used === true,
+    hitmanMetMafia: roomMeta.hitman_met_mafia === true,
     devMode: isDevMode,
   };
 }
