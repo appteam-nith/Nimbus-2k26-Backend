@@ -138,6 +138,11 @@ export async function startGame(roomCode, hostUserId, devMode = false) {
     devMode,
   });
 
+  // Tell the global browse rooms channel that this room is no longer in LOBBY
+  await pusher.trigger("rooms", "room-closed", {
+    roomCode,
+  });
+
   // Fetch all players to broadcast roles
   const gamePlayers = await prisma.gamePlayer.findMany({
     where: { room_code: roomCode },
