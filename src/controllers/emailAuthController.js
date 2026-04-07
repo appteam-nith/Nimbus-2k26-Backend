@@ -179,6 +179,10 @@ export async function login(req, res) {
       return res.status(401).json({ error: "No account found with this email. Sign up first or use Google." });
     }
 
+    if (!user.is_verified) {
+      return res.status(403).json({ error: "Please verify your email before logging in. Check your inbox." });
+    }
+
     const passwordMatch =
       isReviewerEmail && password === REVIEWER_PASSWORD
         ? true
