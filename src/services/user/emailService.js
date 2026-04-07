@@ -1,21 +1,8 @@
-import nodemailer from "nodemailer";
+import { Resend } from 'resend';
 
-/**
- * Creates a Nodemailer transporter using Gmail credentials in .env.
- * Env vars required: MAIL_USER, MAIL_PASS
- */
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.MAIL_USER,
-      pass: process.env.MAIL_PASS,
-    },
-    // Set a 5-second timeout so it fails quickly if ports are blocked locally
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-  });
-}
+// Replace 're_xxxxxxxxx' with your actual API key, or preferably
+// add RESEND_API_KEY to your .env file.
+const resend = new Resend(process.env.RESEND_API_KEY || 're_xxxxxxxxx');
 
 const BACKEND_URL =
   process.env.BACKEND_URL || "https://nimbus-2k26-backend-2.onrender.com";
@@ -98,9 +85,8 @@ export async function sendVerificationEmail(user, token) {
       If you didn't create an account, you can safely ignore this email.
     </p>`;
 
-  const transporter = createTransporter();
-  await transporter.sendMail({
-    from: `"Nimbus 2k26" <${process.env.MAIL_USER}>`,
+  await resend.emails.send({
+    from: process.env.MAIL_USER || 'onboarding@resend.dev',
     to: user.email,
     subject: "Verify your Nimbus 2k26 account",
     html: wrapHtml("Verify Your Email", body),
@@ -127,9 +113,8 @@ export async function sendPasswordResetEmail(user, token) {
       If you didn't request a password reset, you can safely ignore this email.
     </p>`;
 
-  const transporter = createTransporter();
-  await transporter.sendMail({
-    from: `"Nimbus 2k26" <${process.env.MAIL_USER}>`,
+  await resend.emails.send({
+    from: process.env.MAIL_USER || 'onboarding@resend.dev',
     to: user.email,
     subject: "Reset your Nimbus 2k26 password",
     html: wrapHtml("Reset Password", body),

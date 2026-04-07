@@ -1,4 +1,8 @@
-import nodemailer from "nodemailer";
+import { Resend } from 'resend';
+
+// Replace 're_xxxxxxxxx' with your actual API key, or preferably
+// add RESEND_API_KEY to your .env file.
+const resend = new Resend(process.env.RESEND_API_KEY || 're_xxxxxxxxx');
 
 /**
  * Email service using authkey.io Transactional Email API.
@@ -35,18 +39,7 @@ const callAuthkeyApi = async (params) => {
   return data;
 };
 
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    // Using Brevo SMTP Relay by default, or relying on generic SMTP config
-    host: process.env.SMTP_HOST || "smtp-relay.brevo.com",
-    port: process.env.SMTP_PORT || 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
-};
+
 
 /**
  * Sends a password reset email via authkey.io.
@@ -83,10 +76,8 @@ const sendPasswordResetEmail = async (toEmail, resetToken) => {
  * @param {string} otp 
  */
 const sendOtpEmail = async (toEmail, otp) => {
-  const transporter = createTransporter();
-
-  const mailOptions = {
-    from: `"Nimbus 2k26" <${process.env.EMAIL_USER}>`,
+  await resend.emails.send({
+    from: process.env.EMAIL_USER || 'onboarding@resend.dev',
     to: toEmail,
     subject: "Your Registration OTP — Nimbus 2k26",
     html: `
@@ -104,9 +95,7 @@ const sendOtpEmail = async (toEmail, otp) => {
         <p style="font-size: 13px; color: #999;">If you did not request this OTP, please ignore this email. No account will be created.</p>
       </div>
     `,
-  };
-
-  await transporter.sendMail(mailOptions);
+  });
 };
 
 export { sendPasswordResetEmail, sendOtpEmail };
