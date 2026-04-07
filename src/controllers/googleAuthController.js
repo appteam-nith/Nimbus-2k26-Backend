@@ -1,4 +1,4 @@
-// import admin from "../config/firebase.js";
+import admin from "../config/firebase.js";
 import { upsertGoogleUser } from "../services/user/userService.js";
 import generateToken from "../services/generateTokenService.js";
 import { isAllowedCollegeEmail, normalizeEmail } from "../utils/authEmail.js";
