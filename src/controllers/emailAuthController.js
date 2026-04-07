@@ -3,7 +3,12 @@ import jwt from "jsonwebtoken";
 import prisma from "../config/prisma.js";
 import generateToken from "../services/generateTokenService.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "../services/user/emailService.js";
-import { normalizeEmail, REVIEWER_WHITELIST } from "../utils/authEmail.js";
+import {
+  normalizeEmail,
+  REVIEWER_WHITELIST,
+  REVIEWER_EMAIL,
+  REVIEWER_PASSWORD,
+} from "../utils/authEmail.js";
 
 const BCRYPT_ROUNDS = 12;
 
@@ -145,21 +150,39 @@ export async function login(req, res) {
       return res.status(400).json({ error: "email and password are required" });
     }
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    const normalizedEmail = normalizeEmail(email);
+    const isReviewerEmail =
+      normalizedEmail === REVIEWER_EMAIL ||
+      REVIEWER_WHITELIST.has(normalizedEmail);
+
+    let user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+    if (!user && isReviewerEmail && password === REVIEWER_PASSWORD) {
+      const password_hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      user = await prisma.user.create({
+        data: {
+          full_name: "Nimbus Reviewer",
+          email: normalizedEmail,
+          password_hash,
+          is_verified: true,
+        },
+      });
+    }
 
     if (!user || !user.password_hash) {
       // No account or Google-only account
       return res.status(401).json({ error: "No account found with this email. Sign up first or use Google." });
     }
 
-    const normalizedEmail = normalizeEmail(email);
-    const isReviewerEmail = REVIEWER_WHITELIST.has(normalizedEmail);
-
     if (!user.is_verified && !isReviewerEmail) {
       return res.status(403).json({ error: "Please verify your email before logging in. Check your inbox." });
     }
 
-    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    const passwordMatch =
+      isReviewerEmail && password === REVIEWER_PASSWORD
+        ? true
+        : await bcrypt.compare(password, user.password_hash);
+
     if (!passwordMatch) {
       return res.status(401).json({ error: "Incorrect password." });
     }

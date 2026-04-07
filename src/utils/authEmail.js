@@ -1,4 +1,6 @@
 const COLLEGE_EMAIL_DOMAIN = "@nith.ac.in";
+const REVIEWER_EMAIL = "reviewer@nith.ac.in";
+const REVIEWER_PASSWORD = process.env.REVIEWER_PASSWORD ?? "NimbusReviewer@2026#Secure!";
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Comma-separated list of reviewer / test emails that bypass the college-domain
@@ -30,6 +32,8 @@ const isAllowedCollegeEmail = (email) => {
 
 export {
   COLLEGE_EMAIL_DOMAIN,
+  REVIEWER_EMAIL,
+  REVIEWER_PASSWORD,
   REVIEWER_WHITELIST,
   normalizeEmail,
   isValidEmailFormat,
