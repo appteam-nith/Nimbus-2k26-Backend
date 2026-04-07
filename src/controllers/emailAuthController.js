@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import prisma from "../config/prisma.js";
 import generateToken from "../services/generateTokenService.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "../services/user/emailService.js";
+import { normalizeEmail, REVIEWER_WHITELIST } from "../utils/authEmail.js";
 
 const BCRYPT_ROUNDS = 12;
 
@@ -151,7 +152,10 @@ export async function login(req, res) {
       return res.status(401).json({ error: "No account found with this email. Sign up first or use Google." });
     }
 
-    if (!user.is_verified) {
+    const normalizedEmail = normalizeEmail(email);
+    const isReviewerEmail = REVIEWER_WHITELIST.has(normalizedEmail);
+
+    if (!user.is_verified && !isReviewerEmail) {
       return res.status(403).json({ error: "Please verify your email before logging in. Check your inbox." });
     }
 
