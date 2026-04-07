@@ -86,7 +86,7 @@ export async function sendVerificationEmail(user, token) {
     </p>`;
 
   await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+    from: 'onboarding@resend.dev',
     to: user.email,
     subject: "Verify your Nimbus 2k26 account",
     html: wrapHtml("Verify Your Email", body),
@@ -114,7 +114,7 @@ export async function sendPasswordResetEmail(user, token) {
     </p>`;
 
   await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+    from: 'onboarding@resend.dev',
     to: user.email,
     subject: "Reset your Nimbus 2k26 password",
     html: wrapHtml("Reset Password", body),
