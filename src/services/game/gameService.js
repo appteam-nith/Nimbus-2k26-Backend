@@ -1,136 +1,194 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from "crypto";
 import prisma from "../../config/prisma.js";
 import pusher from "../../config/pusher.js";
 import { buildRoleAssignments, validateRoomSize } from "./roleService.js";
 import { PHASE_DURATION } from "./resolveService.js";
 
+const ROOM_SIZE_TO_COUNT = {
+  FIVE: 5,
+  EIGHT: 8,
+  TWELVE: 12,
+};
+
+function parseStateMeta(meta) {
+  if (!meta) return {};
+  if (typeof meta === "string") {
+    try {
+      return JSON.parse(meta);
+    } catch {
+      return {};
+    }
+  }
+  return meta;
+}
+
 /**
  * Starts the game:
  *   1. Validates host + player count
  *   2. Assigns roles via roleService
- *   3. Sets status → NIGHT, starts timer
+ *   3. Sets status -> NIGHT, starts timer
  *   4. Broadcasts game-started + sends each player their role privately
  */
 export async function startGame(roomCode, hostUserId, devMode = false) {
-  const room = await prisma.gameRoom.findUnique({
-    where: { room_code: roomCode },
-    include: { players: true },
-  });
+  const { phaseEndsAt, gamePlayers } = await prisma.$transaction(async (tx) => {
+    // Guard against concurrent starts by locking the room row first.
+    await tx.$queryRaw`
+      SELECT room_code
+      FROM "GameRoom"
+      WHERE room_code = ${roomCode}
+      FOR UPDATE
+    `;
 
-  if (!room) throw Object.assign(new Error("Room not found"), { status: 404 });
-  if (room.host_id !== hostUserId)
-    throw Object.assign(new Error("Only the host can start the game"), { status: 403 });
-  if (room.status !== "LOBBY")
-    throw Object.assign(new Error("Game is already in progress"), { status: 409 });
-
-  const realPlayerCount = room.players.length;
-  let players = room.players;
-  let bots = [];
-  let roomSizeEnum;
-
-  if (devMode) {
-    const actualSize = { FIVE: 5, EIGHT: 8, TWELVE: 12 }[room.room_size] ?? 5;
-    const botCount = actualSize - realPlayerCount;
-
-    if (botCount < 0) {
-      throw Object.assign(new Error("Too many real players for selected room size"), { status: 400 });
-    }
-
-    const botNames = ["Bot Aarav", "Bot Riya", "Bot Karan", "Bot Priya", "Bot Arjun",
-                      "Bot Neha", "Bot Vikram", "Bot Ananya", "Bot Rohan", "Bot Divya",
-                      "Bot Siddharth"];
-
-    for (let i = 0; i < botCount; i++) {
-      const botUserId = randomUUID();
-      const botName = botNames[i] ?? `Bot ${i + 1}`;
-
-      await prisma.user.upsert({
-        where: { user_id: botUserId },
-        update: {},
-        create: {
-          user_id: botUserId,
-          full_name: botName,
-          email: `${botUserId}@bot.local`,
-        },
-      });
-
-      await prisma.gamePlayer.create({
-        data: {
-          room_code: roomCode,
-          user_id: botUserId,
-          isBot: true,
-        },
-      });
-
-      bots.push({
-        userId: botUserId,
-        id: botUserId // Just for easy reference
-      });
-    }
-
-    const updatedRoom = await prisma.gameRoom.findUnique({
+    const room = await tx.gameRoom.findUnique({
       where: { room_code: roomCode },
       include: { players: true },
     });
-    players = updatedRoom.players;
-    roomSizeEnum = room.room_size ?? "FIVE";
-  } else {
-    roomSizeEnum = validateRoomSize(realPlayerCount);
-    if (!roomSizeEnum) {
-      throw Object.assign(
-        new Error(`Player count ${realPlayerCount} is invalid. Must be 5, 8, or 12.`),
-        { status: 400 }
-      );
+
+    if (!room) throw Object.assign(new Error("Room not found"), { status: 404 });
+    if (room.host_id !== hostUserId) {
+      throw Object.assign(new Error("Only the host can start the game"), {
+        status: 403,
+      });
     }
-  }
+    if (room.status !== "LOBBY") {
+      throw Object.assign(new Error("Game is already in progress"), {
+        status: 409,
+      });
+    }
 
-  const assignments = buildRoleAssignments(players, roomSizeEnum);
+    const realPlayerCount = room.players.length;
+    let players = room.players;
+    let bots = [];
+    let roomSizeEnum;
 
-  if (devMode) {
-    bots = bots.map(b => ({
-      ...b,
-      // Find the bot in 'players' to get its pk ID to lookup assignment
-      role: assignments[players.find(p => p.user_id === b.userId)?.id] || null
-    }));
-  }
+    if (devMode) {
+      const actualSize = ROOM_SIZE_TO_COUNT[room.room_size] ?? 5;
+      const botCount = actualSize - realPlayerCount;
 
-  // Write roles + update room in one transaction
-  const phaseEndsAt = new Date(Date.now() + PHASE_DURATION.NIGHT);
+      if (botCount < 0) {
+        throw Object.assign(
+          new Error("Too many real players for selected room size"),
+          { status: 400 }
+        );
+      }
 
-  await prisma.$transaction([
-    // Update room and kick off NIGHT
-    prisma.gameRoom.update({
+      const botNames = [
+        "Bot Aarav",
+        "Bot Riya",
+        "Bot Karan",
+        "Bot Priya",
+        "Bot Arjun",
+        "Bot Neha",
+        "Bot Vikram",
+        "Bot Ananya",
+        "Bot Rohan",
+        "Bot Divya",
+        "Bot Siddharth",
+      ];
+
+      for (let i = 0; i < botCount; i++) {
+        const botUserId = randomUUID();
+        const botName = botNames[i] ?? `Bot ${i + 1}`;
+
+        await tx.user.upsert({
+          where: { user_id: botUserId },
+          update: {},
+          create: {
+            user_id: botUserId,
+            full_name: botName,
+            email: `${botUserId}@bot.local`,
+          },
+        });
+
+        const botPlayer = await tx.gamePlayer.create({
+          data: {
+            room_code: roomCode,
+            user_id: botUserId,
+            isBot: true,
+          },
+          select: { id: true, user_id: true },
+        });
+
+        bots.push({
+          userId: botUserId,
+          id: botPlayer.id,
+        });
+      }
+
+      if (botCount > 0) {
+        const updatedRoom = await tx.gameRoom.findUnique({
+          where: { room_code: roomCode },
+          include: { players: true },
+        });
+        players = updatedRoom?.players ?? players;
+      }
+
+      roomSizeEnum = room.room_size ?? "FIVE";
+    } else {
+      roomSizeEnum = validateRoomSize(realPlayerCount);
+      if (!roomSizeEnum) {
+        throw Object.assign(
+          new Error(
+            `Player count ${realPlayerCount} is invalid. Must be 5, 8, or 12.`
+          ),
+          { status: 400 }
+        );
+      }
+    }
+
+    const assignments = buildRoleAssignments(players, roomSizeEnum);
+
+    if (devMode) {
+      bots = bots.map((bot) => ({
+        ...bot,
+        role: assignments[players.find((p) => p.user_id === bot.userId)?.id] || null,
+      }));
+    }
+
+    const phaseEndsAt = new Date(Date.now() + PHASE_DURATION.NIGHT);
+    const existingMeta = parseStateMeta(room.state_meta);
+    const nextMeta = { ...existingMeta };
+
+    // Reset only game-start keys we own; preserve any unrelated runtime keys.
+    nextMeta.hitman_resolved = false;
+    nextMeta.night_resolved = false;
+    nextMeta.hitman_met_mafia = false;
+    nextMeta.bounty_vip_player_id = null;
+    nextMeta.bounty_vip_dead = false;
+    nextMeta.bounty_kill_unlocked = false;
+    nextMeta.reporter_used = false;
+    nextMeta.reporter_result = null;
+    nextMeta.early_deaths = [];
+    nextMeta.dev_mode = devMode;
+    nextMeta.bots = bots;
+
+    await tx.gameRoom.update({
       where: { room_code: roomCode },
       data: {
         room_size: roomSizeEnum,
         status: "NIGHT",
         round: 1,
         phase_ends_at: phaseEndsAt,
-        state_meta: {
-          hitman_resolved: false,
-          night_resolved: false,
-          hitman_met_mafia: false,
-          bounty_vip_player_id: null,
-          bounty_vip_dead: false,
-          bounty_kill_unlocked: false,
-          reporter_used: false,
-          reporter_result: null,
-          early_deaths: [],
-          dev_mode: devMode,
-          bots: bots,          // empty array if not dev mode
-        },
+        state_meta: nextMeta,
       },
-    }),
-    // Write each real player's role
-    ...Object.entries(assignments).map(([playerId, role]) =>
-      prisma.gamePlayer.update({
+    });
+
+    for (const [playerId, role] of Object.entries(assignments)) {
+      await tx.gamePlayer.update({
         where: { id: playerId },
         data: { role },
-      })
-    ),
-  ]);
+      });
+    }
 
-  // Broadcast game-started to the whole room
+    const gamePlayers = await tx.gamePlayer.findMany({
+      where: { room_code: roomCode },
+      select: { user_id: true, role: true, isBot: true },
+    });
+
+    return { phaseEndsAt, gamePlayers };
+  });
+
+  // Broadcast game-started to the whole room.
   await pusher.trigger(`game-${roomCode}`, "game-started", {
     phase: "NIGHT",
     round: 1,
@@ -138,18 +196,12 @@ export async function startGame(roomCode, hostUserId, devMode = false) {
     devMode,
   });
 
-  // Tell the global browse rooms channel that this room is no longer in LOBBY
+  // Tell the global browse rooms channel that this room is no longer in LOBBY.
   await pusher.trigger("rooms", "room-closed", {
     roomCode,
   });
 
-  // Fetch all players to broadcast roles
-  const gamePlayers = await prisma.gamePlayer.findMany({
-    where: { room_code: roomCode },
-    select: { user_id: true, role: true, isBot: true },
-  });
-
-  // In dev mode, also broadcast ALL roles so every player can see the full board
+  // In dev mode, also broadcast ALL roles so every player can see the full board.
   const allRoles = devMode
     ? Object.fromEntries(gamePlayers.map((p) => [p.user_id, p.role]))
     : null;
@@ -164,7 +216,6 @@ export async function startGame(roomCode, hostUserId, devMode = false) {
         roomCode,
         role: p.role,
         devMode,
-        // Only include the full role map for the host
         ...(devMode && p.user_id === hostUserId ? { allRoles } : {}),
       })
     )

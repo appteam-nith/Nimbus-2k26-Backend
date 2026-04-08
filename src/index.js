@@ -5,20 +5,23 @@ import express from "express";
 import cors from "cors";
 import UserRoutes from "./routes/userRoute.js";
 import CoreTeamRoutes from "./routes/coreTeamRoute.js";
-import EventRoutes from "./routes/eventRoute.js";
 import GameRoutes from "./routes/gameRoutes.js";
 import errorHandler from "./middlewares/errorMiddleware.js";
 import { resolveExpiredRooms } from "./services/game/resolveService.js";
 import pusher from "./config/pusher.js";
+import clubRoutes from "./routes/clubsRoute.js";
+import eventRoute from "./routes/eventRoute.js";
+import projectRoute from "./routes/projectRoute.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(
   cors({
-    origin: "*",
+    origin: process.env.FRONTEND_URL || "http://localhost:3001",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
@@ -155,21 +158,12 @@ app.get("/delete-account", (_req, res) => {
 });
 
 // ── API ROUTES ───────────────────────────────────────────────────────────────
-
-import clubRoutes from "./routes/clubsRoute.js";
 app.use("/api/clubs", clubRoutes);
-
-import eventRoute from "./routes/eventRoute.js";
-import projectRoute from "./routes/projectRoute.js";
-
 app.use("/api/events", eventRoute);
 app.use("/api/projects", projectRoute);
-
 app.use("/api/users", UserRoutes);
 app.use("/api/coreteam", CoreTeamRoutes);
-
 app.use("/api/game", GameRoutes);
-
 
 app.use(errorHandler);
 
@@ -179,13 +173,35 @@ app.listen(PORT, () => {
   // ─── GAME HEARTBEAT ─────────────────────────────────────────────────────────
   // Checks every second for rooms whose phase timer has expired and resolves them.
   // This is the clock that drives the entire game loop.
-  setInterval(resolveExpiredRooms, 1000);
-  console.log("[heartbeat] Game loop started (1s interval)");
+  
+  // FIX: Guard prevents multiple intervals on hot reload/restart
+  if (!global.gameHeartbeat) {
+    global.gameHeartbeat = setInterval(async () => {
+      try {
+        await resolveExpiredRooms();
+      } catch (e) {
+        console.error("[heartbeat] Error resolving expired rooms:", e);
+      }
+    }, 1000);
+    console.log("[heartbeat] Game loop started (1s interval)");
+  }
+});
 
-  // ─── PUSHER TEST TRIGGER ────────────────────────────────────────────────────
-  // Temporarily disabled for testing
-  // pusher.trigger("my-channel", "my-event", {
-  //   message: "hello world"
-  // }).then(() => console.log("[pusher] Test event sent to my-channel!"))
-  //   .catch(e => console.error("[pusher] Error sending test event:", e));
+// ─── GRACEFUL SHUTDOWN ──────────────────────────────────────────────────────
+process.on("SIGINT", () => {
+  console.log("[shutdown] Cleaning up...");
+  if (global.gameHeartbeat) {
+    clearInterval(global.gameHeartbeat);
+    console.log("[shutdown] Game heartbeat cleared");
+  }
+  process.exit(0);
+});
+
+process.on("SIGTERM", () => {
+  console.log("[shutdown] Cleaning up...");
+  if (global.gameHeartbeat) {
+    clearInterval(global.gameHeartbeat);
+    console.log("[shutdown] Game heartbeat cleared");
+  }
+  process.exit(0);
 });
