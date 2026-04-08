@@ -34,6 +34,18 @@ const VOTE_TYPE_ROLE = {
 // Hitman early lockout — actions lock at T-5s before night end
 const HITMAN_LOCKOUT_MS = 5_000;
 
+function parseStateMeta(value) {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  return value;
+}
+
 // ─── LIST OPEN ROOMS ─────────────────────────────────────────────────────────
 
 export const handleListRooms = async (req, res) => {
@@ -262,14 +274,16 @@ export const handleVote = async (req, res) => {
     }
 
     // ── Parse state_meta ────────────────────────────────────────────────────
-    const meta = room.state_meta
-      ? typeof room.state_meta === "string"
-        ? JSON.parse(room.state_meta)
-        : room.state_meta
-      : {};
+    const meta = parseStateMeta(room.state_meta);
 
     // ── Hitman T-5s lockout ─────────────────────────────────────────────────
     if (vote_type === "HITMAN_TARGET") {
+      if (meta.hitman_resolved === true) {
+        return res.status(409).json({
+          error: "Hitman action already resolved for this night",
+        });
+      }
+
       if (room.phase_ends_at) {
         const timeLeftMs = new Date(room.phase_ends_at) - Date.now();
         if (timeLeftMs <= HITMAN_LOCKOUT_MS) {
@@ -369,12 +383,51 @@ export const handleVote = async (req, res) => {
       });
 
       let result;
-      if (targetPlayer?.role === "HITMAN" && room.round <= 2) {
-        // Hitman immunity on Night 1 and Night 2 — appears as CITIZEN
-        result = "CITIZEN";
-      } else if (targetPlayer?.role === "HITMAN") {
-        // Past immunity — appears as HITMAN
-        result = "HITMAN";
+      if (targetPlayer?.role === "HITMAN") {
+        // "First check" rule:
+        // - First time this Cop checks Hitman on N1/N2 => CITIZEN
+        // - Any later check => HITMAN
+        // - First check on N3+ => HITMAN
+        result = await prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`
+            SELECT room_code
+            FROM "GameRoom"
+            WHERE room_code = ${room_code}
+            FOR UPDATE
+          `;
+
+          const lockedRoom = await tx.gameRoom.findUnique({
+            where: { room_code },
+            select: { round: true, state_meta: true },
+          });
+
+          const lockedMeta = parseStateMeta(lockedRoom?.state_meta);
+          const checkedBy =
+            lockedMeta.cop_checked_hitman_by &&
+            typeof lockedMeta.cop_checked_hitman_by === "object" &&
+            !Array.isArray(lockedMeta.cop_checked_hitman_by)
+              ? { ...lockedMeta.cop_checked_hitman_by }
+              : {};
+
+          const alreadyChecked = checkedBy[voterId] === true;
+          const effectiveRound = lockedRoom?.round ?? room.round;
+          const computedResult =
+            !alreadyChecked && effectiveRound <= 2 ? "CITIZEN" : "HITMAN";
+
+          checkedBy[voterId] = true;
+
+          await tx.gameRoom.update({
+            where: { room_code },
+            data: {
+              state_meta: {
+                ...lockedMeta,
+                cop_checked_hitman_by: checkedBy,
+              },
+            },
+          });
+
+          return computedResult;
+        });
       } else if (targetPlayer?.role === "MAFIA") {
         result = "MAFIA";
       } else {
