@@ -29,8 +29,15 @@ function parseStateMeta(meta) {
  *   3. Sets status -> NIGHT, starts timer
  *   4. Broadcasts game-started + sends each player their role privately
  */
-export async function startGame(roomCode, hostUserId, devMode = false) {
-  const { phaseEndsAt, gamePlayers } = await prisma.$transaction(async (tx) => {
+export async function startGame(
+  roomCode,
+  hostUserId,
+  devMode = false,
+  hostRoleOverride = null
+) {
+  // Increase interactive transaction timeout to accommodate dev-mode bot creation
+  const { phaseEndsAt, gamePlayers } = await prisma.$transaction(
+    async (tx) => {
     // Guard against concurrent starts by locking the room row first.
     await tx.$queryRaw`
       SELECT room_code
@@ -136,7 +143,12 @@ export async function startGame(roomCode, hostUserId, devMode = false) {
       }
     }
 
-    const assignments = buildRoleAssignments(players, roomSizeEnum);
+    const assignments = buildRoleAssignments(
+      players,
+      roomSizeEnum,
+      devMode ? hostRoleOverride : null,
+      hostUserId
+    );
 
     if (devMode) {
       bots = bots.map((bot) => ({
@@ -186,7 +198,9 @@ export async function startGame(roomCode, hostUserId, devMode = false) {
     });
 
     return { phaseEndsAt, gamePlayers };
-  });
+    },
+    { timeout: 20000 }
+  );
 
   // Broadcast game-started to the whole room.
   await pusher.trigger(`game-${roomCode}`, "game-started", {
