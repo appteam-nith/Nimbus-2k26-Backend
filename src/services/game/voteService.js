@@ -230,7 +230,7 @@ export async function submitVote({
       // Acquire an advisory transaction-scoped lock for this (room, round, vote_type)
       // This serializes singleton action submissions without locking the entire room row.
       const lockKey = `${roomCode}:${round}:${voteType}`;
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`;
 
       // Read room metadata under the same transaction for atomic action guards.
       await tx.$queryRaw`
