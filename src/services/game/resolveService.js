@@ -84,10 +84,11 @@ async function setMetaAtomic(roomCode, patch, expectedCurrent = null) {
   // This prevents the classic read-then-write race between concurrent workers.
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw`SELECT state_meta FROM "GameRoom" WHERE room_code = ${roomCode} FOR UPDATE`;
+      // Cast jsonb to text so Prisma $queryRaw can deserialize it (avoids 'void' type error)
+      const rows = await tx.$queryRaw`SELECT state_meta::text as state_meta FROM "GameRoom" WHERE room_code = ${roomCode} FOR UPDATE`;
       if (!rows || rows.length === 0) return null;
-      // Some drivers return state_meta as string; normalize
-      const currentRaw = rows[0].state_meta || {};
+      // state_meta is now always a string (cast above) or null
+      const currentRaw = rows[0].state_meta || "{}";
       const current = typeof currentRaw === "string" ? JSON.parse(currentRaw) : currentRaw;
 
       // If we expect a specific prior state and it changed, fail
@@ -113,9 +114,11 @@ async function setMetaAtomic(roomCode, patch, expectedCurrent = null) {
 async function acquireHitmanLock(roomCode) {
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw`SELECT state_meta FROM "GameRoom" WHERE room_code = ${roomCode} FOR UPDATE`;
+      // Cast jsonb to text so Prisma $queryRaw can deserialize it (avoids 'void' type error)
+      const rows = await tx.$queryRaw`SELECT state_meta::text as state_meta FROM "GameRoom" WHERE room_code = ${roomCode} FOR UPDATE`;
       if (!rows || rows.length === 0) return null;
-      const currentRaw = rows[0].state_meta || {};
+      // state_meta is now always a string (cast above) or null
+      const currentRaw = rows[0].state_meta || "{}";
       const current = typeof currentRaw === "string" ? JSON.parse(currentRaw) : currentRaw;
 
       // Don't acquire if already resolved or someone else resolving
