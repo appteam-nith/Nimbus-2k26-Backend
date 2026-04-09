@@ -1,6 +1,10 @@
 import prisma from "../config/prisma.js";
 import pusher from "../config/pusher.js";
-import { createRoom, joinRoom, getRoomState } from "../services/game/roomService.js";
+import {
+  createRoom,
+  joinRoom,
+  getRoomState,
+} from "../services/game/roomService.js";
 import { startGame } from "../services/game/gameService.js";
 import { submitVote } from "../services/game/voteService.js";
 import { PHASE_DURATION } from "../services/game/resolveService.js";
@@ -8,28 +12,28 @@ import { PHASE_DURATION } from "../services/game/resolveService.js";
 // ─── PHASE GUARD MAP ──────────────────────────────────────────────────────────
 // Each vote_type is only valid in certain game phases
 const VOTE_TYPE_PHASE = {
-  DAY_LYNCH:          "VOTING",
-  MAFIA_TARGET:       "NIGHT",
-  DOC_SAVE:           "NIGHT",
-  COP_INVESTIGATE:    "NIGHT",
-  NURSE_ACTION:       "NIGHT",
-  HITMAN_TARGET:      "NIGHT",
-  BOUNTY_HUNTER_VIP:  "NIGHT",
+  DAY_LYNCH: "VOTING",
+  MAFIA_TARGET: "NIGHT",
+  DOC_SAVE: "NIGHT",
+  COP_INVESTIGATE: "NIGHT",
+  NURSE_ACTION: "NIGHT",
+  HITMAN_TARGET: "NIGHT",
+  BOUNTY_HUNTER_VIP: "NIGHT",
   BOUNTY_HUNTER_SHOT: "NIGHT",
-  REPORTER_EXPOSE:    "NIGHT",
+  REPORTER_EXPOSE: "NIGHT",
 };
 
 // Which role is allowed to cast each vote type
 const VOTE_TYPE_ROLE = {
-  DAY_LYNCH:          null,             // anyone alive
-  MAFIA_TARGET:       "MAFIA",
-  DOC_SAVE:           "DOCTOR",
-  COP_INVESTIGATE:    "COP",
-  NURSE_ACTION:       "NURSE",
-  HITMAN_TARGET:      "HITMAN",
-  BOUNTY_HUNTER_VIP:  "BOUNTY_HUNTER",
+  DAY_LYNCH: null, // anyone alive
+  MAFIA_TARGET: "MAFIA",
+  DOC_SAVE: "DOCTOR",
+  COP_INVESTIGATE: "COP",
+  NURSE_ACTION: "NURSE",
+  HITMAN_TARGET: "HITMAN",
+  BOUNTY_HUNTER_VIP: "BOUNTY_HUNTER",
   BOUNTY_HUNTER_SHOT: "BOUNTY_HUNTER",
-  REPORTER_EXPOSE:    "REPORTER",
+  REPORTER_EXPOSE: "REPORTER",
 };
 
 // Hitman early lockout — actions lock at T-5s before night end
@@ -53,9 +57,9 @@ export const handleListRooms = async (req, res) => {
   try {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const rooms = await prisma.gameRoom.findMany({
-      where: { 
+      where: {
         status: "LOBBY",
-        created_at: { gte: twoHoursAgo }
+        created_at: { gte: twoHoursAgo },
       },
       include: { _count: { select: { players: true } } },
       orderBy: { created_at: "desc" },
@@ -84,7 +88,9 @@ export const handleCreateRoom = async (req, res) => {
     const { room_size } = req.body;
 
     if (!["FIVE", "EIGHT", "TWELVE"].includes(room_size)) {
-      return res.status(400).json({ error: "room_size must be FIVE, EIGHT, or TWELVE" });
+      return res
+        .status(400)
+        .json({ error: "room_size must be FIVE, EIGHT, or TWELVE" });
     }
 
     const code = await createRoom(userId, room_size);
@@ -117,7 +123,8 @@ export const handleJoinRoom = async (req, res) => {
     const userId = req.user.userId;
     const { room_code } = req.body;
 
-    if (!room_code) return res.status(400).json({ error: "room_code is required" });
+    if (!room_code)
+      return res.status(400).json({ error: "room_code is required" });
 
     await joinRoom(room_code, userId);
 
@@ -132,8 +139,13 @@ export const handleJoinRoom = async (req, res) => {
     });
 
     // Update the global rooms browser with new player count
-    const playerCount = await prisma.gamePlayer.count({ where: { room_code: room_code } });
-    const room = await prisma.gameRoom.findUnique({ where: { room_code: room_code }, select: { room_size: true } });
+    const playerCount = await prisma.gamePlayer.count({
+      where: { room_code: room_code },
+    });
+    const room = await prisma.gameRoom.findUnique({
+      where: { room_code: room_code },
+      select: { room_size: true },
+    });
     if (room) {
       await pusher.trigger("rooms", "room-opened", {
         roomCode: room_code,
@@ -157,22 +169,64 @@ export const handleLeaveRoom = async (req, res) => {
     const userId = req.user.userId;
     const { room_code } = req.body;
 
-    if (!room_code) return res.status(400).json({ error: "room_code is required" });
+    if (!room_code)
+      return res.status(400).json({ error: "room_code is required" });
+
+    // Fetch room status + player name BEFORE leaving (records may be deleted after).
+    const [roomSnapshot, playerSnapshot] = await Promise.all([
+      prisma.gameRoom.findUnique({
+        where: { room_code },
+        select: { status: true },
+      }),
+      prisma.gamePlayer.findUnique({
+        where: { room_code_user_id: { room_code, user_id: userId } },
+        include: { user: { select: { full_name: true } } },
+      }),
+    ]);
+    const playerName = playerSnapshot?.user?.full_name ?? "A player";
+    const wasActiveGame =
+      roomSnapshot &&
+      roomSnapshot.status !== "LOBBY" &&
+      roomSnapshot.status !== "ENDED";
 
     const { leaveRoom } = await import("../services/game/roomService.js");
     const result = await leaveRoom(room_code, userId);
 
     if (result && result.deleted) {
-      // Room is gone — tell the browse screen
+      // Room fully deleted (empty lobby or last real player in dev-mode game).
       await pusher.trigger("rooms", "room-closed", { roomCode: room_code });
     } else if (result && !result.deleted) {
+      // Lobby: notify the room-lobby channel.
       await pusher.trigger(`room-${room_code}`, "player-left", {
         userId,
         newHostId: result.newHostId,
       });
-      // Update player count in browse screen
-      const playerCount = await prisma.gamePlayer.count({ where: { room_code: room_code } });
-      const rm = await prisma.gameRoom.findUnique({ where: { room_code: room_code }, select: { room_size: true } });
+
+      // Active game: also notify the game channel so in-game screens can mark
+      // the player as "left" and display a system chat message.
+      if (wasActiveGame) {
+        await pusher.trigger(`game-${room_code}`, "player-left", {
+          userId,
+          playerName,
+        });
+        await pusher.trigger(`game-${room_code}`, "chat-message", {
+          userId: "system",
+          name: "System",
+          message: `${playerName} left the game`,
+          channel: "global",
+          timestamp: new Date().toISOString(),
+          isSystem: true,
+        });
+      }
+
+      // Update player count on the browse screen.
+      const playerCount = await prisma.gamePlayer.count({
+        where: { room_code: room_code },
+      });
+      const rm = await prisma.gameRoom.findUnique({
+        where: { room_code: room_code },
+        select: { room_size: true },
+      });
       if (rm && playerCount > 0) {
         await pusher.trigger("rooms", "room-opened", {
           roomCode: room_code,
@@ -216,7 +270,8 @@ export const handleStartGame = async (req, res) => {
     const userId = req.user.userId;
     const { room_code, dev_mode, dev_host_role } = req.body;
 
-    if (!room_code) return res.status(400).json({ error: "room_code is required" });
+    if (!room_code)
+      return res.status(400).json({ error: "room_code is required" });
 
     await startGame(room_code, userId, dev_mode, dev_host_role ?? null);
 
@@ -235,19 +290,27 @@ export const handleVote = async (req, res) => {
     const { room_code, target_id, vote_type, target_meta } = req.body;
 
     if (!room_code || !vote_type) {
-      return res.status(400).json({ error: "room_code and vote_type are required" });
+      return res
+        .status(400)
+        .json({ error: "room_code and vote_type are required" });
     }
 
     // Fetch room state
     const room = await prisma.gameRoom.findUnique({
       where: { room_code },
-      select: { status: true, round: true, phase_ends_at: true, state_meta: true },
+      select: {
+        status: true,
+        round: true,
+        phase_ends_at: true,
+        state_meta: true,
+      },
     });
     if (!room) return res.status(404).json({ error: "Room not found" });
 
     // ── Phase guard ─────────────────────────────────────────────────────────
     const requiredPhase = VOTE_TYPE_PHASE[vote_type];
-    if (!requiredPhase) return res.status(400).json({ error: `Unknown vote_type: ${vote_type}` });
+    if (!requiredPhase)
+      return res.status(400).json({ error: `Unknown vote_type: ${vote_type}` });
     if (room.status !== requiredPhase) {
       return res.status(409).json({
         error: `${vote_type} is only valid during ${requiredPhase} phase (current: ${room.status})`,
@@ -261,16 +324,22 @@ export const handleVote = async (req, res) => {
         where: { room_code_user_id: { room_code, user_id: voterId } },
         select: { role: true, status: true },
       });
-      if (!voterPlayer) return res.status(404).json({ error: "Player not in room" });
-      if (voterPlayer.status !== "ALIVE") return res.status(403).json({ error: "Eliminated players cannot act" });
+      if (!voterPlayer)
+        return res.status(404).json({ error: "Player not in room" });
+      if (voterPlayer.status !== "ALIVE")
+        return res.status(403).json({ error: "Eliminated players cannot act" });
 
       // MAFIA_TARGET: any MAFIA member can vote (not just one)
       if (requiredRole === "MAFIA") {
         if (voterPlayer.role !== "MAFIA") {
-          return res.status(403).json({ error: `Only MAFIA can cast ${vote_type}` });
+          return res
+            .status(403)
+            .json({ error: `Only MAFIA can cast ${vote_type}` });
         }
       } else if (voterPlayer.role !== requiredRole) {
-        return res.status(403).json({ error: `Only ${requiredRole} can cast ${vote_type}` });
+        return res
+          .status(403)
+          .json({ error: `Only ${requiredRole} can cast ${vote_type}` });
       }
     }
 
@@ -296,7 +365,8 @@ export const handleVote = async (req, res) => {
       // Validate target_meta format
       if (!target_meta?.targets || !target_meta?.roles) {
         return res.status(400).json({
-          error: "HITMAN_TARGET requires target_meta with { targets: [id,id], roles: [role,role] }",
+          error:
+            "HITMAN_TARGET requires target_meta with { targets: [id,id], roles: [role,role] }",
         });
       }
       if (target_meta.targets.length !== 2 || target_meta.roles.length !== 2) {
@@ -311,7 +381,9 @@ export const handleVote = async (req, res) => {
           select: { role: true },
         });
         if (tp?.role === "COP") {
-          return res.status(400).json({ error: "Hitman cannot target the Cop" });
+          return res
+            .status(400)
+            .json({ error: "Hitman cannot target the Cop" });
         }
       }
     }
@@ -319,7 +391,9 @@ export const handleVote = async (req, res) => {
     // ── Bounty Hunter VIP — Night 1 only ────────────────────────────────────
     if (vote_type === "BOUNTY_HUNTER_VIP") {
       if (room.round !== 1) {
-        return res.status(409).json({ error: "VIP selection is only allowed on Night 1" });
+        return res
+          .status(409)
+          .json({ error: "VIP selection is only allowed on Night 1" });
       }
     }
 
@@ -327,7 +401,8 @@ export const handleVote = async (req, res) => {
     if (vote_type === "BOUNTY_HUNTER_SHOT") {
       if (!meta.bounty_kill_unlocked) {
         return res.status(409).json({
-          error: "Bounty Hunter kill is not yet unlocked (VIP must be killed first)",
+          error:
+            "Bounty Hunter kill is not yet unlocked (VIP must be killed first)",
         });
       }
     }
@@ -443,7 +518,9 @@ export const handleVote = async (req, res) => {
       });
 
       // Also return in HTTP response as belt-and-suspenders
-      return res.status(200).json({ success: true, investigation_result: result });
+      return res
+        .status(200)
+        .json({ success: true, investigation_result: result });
     }
 
     // ── Nurse action — instant private feedback ─────────────────────────────
@@ -477,7 +554,9 @@ export const handleVote = async (req, res) => {
       });
 
       // Also return in HTTP response
-      return res.status(200).json({ success: true, investigation_result: targetPlayer?.role });
+      return res
+        .status(200)
+        .json({ success: true, investigation_result: targetPlayer?.role });
     }
 
     // ── Broadcast vote-updated with tally (for DAY_LYNCH) ────────────────────
@@ -549,7 +628,7 @@ export const handleAdjustDayTime = async (req, res) => {
       if (room.status !== "DISCUSSION") {
         throw Object.assign(
           new Error("Day time can only be adjusted during DISCUSSION"),
-          { status: 409 }
+          { status: 409 },
         );
       }
 
@@ -563,7 +642,7 @@ export const handleAdjustDayTime = async (req, res) => {
       if (me.status !== "ALIVE") {
         throw Object.assign(
           new Error("Eliminated players cannot adjust day time"),
-          { status: 403 }
+          { status: 403 },
         );
       }
 
@@ -606,7 +685,7 @@ export const handleAdjustDayTime = async (req, res) => {
       const deltaSeconds = Math.max(1, Math.round(baseSeconds / aliveCount));
       const netAdjustment = Object.values(votes).reduce(
         (sum, value) => sum + (value === 1 || value === -1 ? value : 0),
-        0
+        0,
       );
 
       const startRaw = isCurrentRound ? meta.discussion_phase_started_at : null;
@@ -617,7 +696,7 @@ export const handleAdjustDayTime = async (req, res) => {
 
       const phaseEndsAt = new Date(
         discussionStartAt.getTime() +
-          (baseSeconds + netAdjustment * deltaSeconds) * 1000
+          (baseSeconds + netAdjustment * deltaSeconds) * 1000,
       );
 
       const nextMeta = {
@@ -637,10 +716,10 @@ export const handleAdjustDayTime = async (req, res) => {
       });
 
       const increaseVotes = Object.values(votes).filter(
-        (value) => value === 1
+        (value) => value === 1,
       ).length;
       const decreaseVotes = Object.values(votes).filter(
-        (value) => value === -1
+        (value) => value === -1,
       ).length;
 
       return {
@@ -666,6 +745,28 @@ export const handleAdjustDayTime = async (req, res) => {
       decreaseVotes: result.decreaseVotes,
     });
 
+    // System message: broadcast who adjusted the time and in which direction.
+    if (result.adjustment !== 0) {
+      try {
+        const userRecord = await prisma.user.findUnique({
+          where: { user_id: userId },
+          select: { full_name: true },
+        });
+        const playerName = userRecord?.full_name ?? "A player";
+        const action = result.adjustment > 0 ? "extended" : "reduced";
+        await pusher.trigger(`game-${room_code}`, "chat-message", {
+          userId: "system",
+          name: "System",
+          message: `${playerName} ${action} the remaining time`,
+          channel: "global",
+          timestamp: new Date().toISOString(),
+          isSystem: true,
+        });
+      } catch (sysErr) {
+        console.error("[adjustDayTime:sysMsg]", sysErr.message);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       phaseEndsAt: result.phaseEndsAt.toISOString(),
@@ -688,7 +789,9 @@ export const handleChat = async (req, res) => {
     const { room_code, message, channel } = req.body;
 
     if (!room_code || !message?.trim()) {
-      return res.status(400).json({ error: "room_code and message are required" });
+      return res
+        .status(400)
+        .json({ error: "room_code and message are required" });
     }
 
     const room = await prisma.gameRoom.findUnique({
@@ -717,26 +820,41 @@ export const handleChat = async (req, res) => {
     if (channel === "mafia") {
       // Only during NIGHT, only for MAFIA (and met HITMAN)
       if (room.status !== "NIGHT") {
-        return res.status(409).json({ error: "Mafia chat is only available during NIGHT" });
+        return res
+          .status(409)
+          .json({ error: "Mafia chat is only available during NIGHT" });
       }
       const meta = room.state_meta
-        ? typeof room.state_meta === "string" ? JSON.parse(room.state_meta) : room.state_meta
+        ? typeof room.state_meta === "string"
+          ? JSON.parse(room.state_meta)
+          : room.state_meta
         : {};
-      if (player.role !== "MAFIA" && !(player.role === "HITMAN" && meta.hitman_met_mafia)) {
-        return res.status(403).json({ error: "Only Mafia team can use this channel" });
-      }
+      if (
+        player.role !== "MAFIA" &&
+        player.role !== "MAFIA_HELPER" &&
+        !(player.role === "HITMAN" && meta.hitman_met_mafia)
+      )
+        return res
+          .status(403)
+          .json({ error: "Only Mafia team can use this channel" });
       targetChannel = `private-mafia-${room_code}`;
     } else if (channel === "doc") {
       if (room.status !== "NIGHT") {
-        return res.status(409).json({ error: "Doctor-Nurse chat is only available during NIGHT" });
+        return res
+          .status(409)
+          .json({ error: "Doctor-Nurse chat is only available during NIGHT" });
       }
       if (room.room_size !== "TWELVE") {
         return res
           .status(403)
-          .json({ error: "Doctor-Nurse chat is only available in 12-player rooms" });
+          .json({
+            error: "Doctor-Nurse chat is only available in 12-player rooms",
+          });
       }
       if (!["DOCTOR", "NURSE"].includes(player.role)) {
-        return res.status(403).json({ error: "Only Doctor and Nurse can use this channel" });
+        return res
+          .status(403)
+          .json({ error: "Only Doctor and Nurse can use this channel" });
       }
       if (!room.nurse_met_doctor) {
         return res
@@ -746,16 +864,22 @@ export const handleChat = async (req, res) => {
       targetChannel = `private-doc-${room_code}`;
     } else if (channel === "citizen") {
       if (room.status !== "NIGHT") {
-        return res.status(409).json({ error: "Citizen chat is only available during NIGHT" });
+        return res
+          .status(409)
+          .json({ error: "Citizen chat is only available during NIGHT" });
       }
       if (player.role !== "CITIZEN") {
-        return res.status(403).json({ error: "Only Citizens can use this channel" });
+        return res
+          .status(403)
+          .json({ error: "Only Citizens can use this channel" });
       }
       targetChannel = `private-citizen-${room_code}`;
     } else {
       // Global chat — DISCUSSION only
       if (room.status !== "DISCUSSION") {
-        return res.status(409).json({ error: "Chat is only allowed during DISCUSSION phase" });
+        return res
+          .status(409)
+          .json({ error: "Chat is only allowed during DISCUSSION phase" });
       }
     }
 
@@ -783,16 +907,26 @@ export const handlePusherAuth = async (req, res) => {
     const userId = req.user.userId;
 
     if (!socketId || !channel) {
-      return res.status(400).json({ error: "socket_id and channel_name are required" });
+      return res
+        .status(400)
+        .json({ error: "socket_id and channel_name are required" });
     }
 
     // ── Private user channel: private-{userId} ─────────────────────────────
-    if (channel.startsWith("private-") && !channel.startsWith("private-mafia-") &&
-        !channel.startsWith("private-doc-") && !channel.startsWith("private-hitman-") && 
-        !channel.startsWith("private-citizen-")) {
+    if (
+      channel.startsWith("private-") &&
+      !channel.startsWith("private-mafia-") &&
+      !channel.startsWith("private-doc-") &&
+      !channel.startsWith("private-hitman-") &&
+      !channel.startsWith("private-citizen-")
+    ) {
       // Personal channel — only the owner
       if (!channel.includes(userId)) {
-        return res.status(403).json({ error: "Cannot subscribe to another player's private channel" });
+        return res
+          .status(403)
+          .json({
+            error: "Cannot subscribe to another player's private channel",
+          });
       }
       const auth = pusher.authorizeChannel(socketId, channel);
       return res.status(200).json(auth);
@@ -812,12 +946,20 @@ export const handlePusherAuth = async (req, res) => {
         select: { state_meta: true },
       });
       const meta = room?.state_meta
-        ? typeof room.state_meta === "string" ? JSON.parse(room.state_meta) : room.state_meta
+        ? typeof room.state_meta === "string"
+          ? JSON.parse(room.state_meta)
+          : room.state_meta
         : {};
 
-      // MAFIA can always access; HITMAN only if met mafia
-      if (player.role !== "MAFIA" && !(player.role === "HITMAN" && meta.hitman_met_mafia)) {
-        return res.status(403).json({ error: "Not authorized for mafia channel" });
+      // MAFIA and MAFIA_HELPER always; HITMAN only if met mafia
+      if (
+        player.role !== "MAFIA" &&
+        player.role !== "MAFIA_HELPER" &&
+        !(player.role === "HITMAN" && meta.hitman_met_mafia)
+      ) {
+        return res
+          .status(403)
+          .json({ error: "Not authorized for mafia channel" });
       }
       const auth = pusher.authorizeChannel(socketId, channel);
       return res.status(200).json(auth);
@@ -844,10 +986,14 @@ export const handlePusherAuth = async (req, res) => {
       if (!room.nurse_met_doctor) {
         return res
           .status(403)
-          .json({ error: "Doc channel unlocks only after Doctor and Nurse meet" });
+          .json({
+            error: "Doc channel unlocks only after Doctor and Nurse meet",
+          });
       }
       if (!["DOCTOR", "NURSE"].includes(player.role)) {
-        return res.status(403).json({ error: "Not authorized for doc channel" });
+        return res
+          .status(403)
+          .json({ error: "Not authorized for doc channel" });
       }
       const auth = pusher.authorizeChannel(socketId, channel);
       return res.status(200).json(auth);
@@ -867,7 +1013,9 @@ export const handlePusherAuth = async (req, res) => {
         select: { state_meta: true },
       });
       const meta = room?.state_meta
-        ? typeof room.state_meta === "string" ? JSON.parse(room.state_meta) : room.state_meta
+        ? typeof room.state_meta === "string"
+          ? JSON.parse(room.state_meta)
+          : room.state_meta
         : {};
 
       if (!meta.hitman_met_mafia) {
@@ -875,7 +1023,9 @@ export const handlePusherAuth = async (req, res) => {
       }
 
       if (!["HITMAN", "MAFIA"].includes(player.role)) {
-        return res.status(403).json({ error: "Not authorized for hitman channel" });
+        return res
+          .status(403)
+          .json({ error: "Not authorized for hitman channel" });
       }
       const auth = pusher.authorizeChannel(socketId, channel);
       return res.status(200).json(auth);
@@ -891,7 +1041,9 @@ export const handlePusherAuth = async (req, res) => {
       if (!player) return res.status(403).json({ error: "Not in this room" });
 
       if (player.role !== "CITIZEN") {
-        return res.status(403).json({ error: "Not authorized for citizen channel" });
+        return res
+          .status(403)
+          .json({ error: "Not authorized for citizen channel" });
       }
       const auth = pusher.authorizeChannel(socketId, channel);
       return res.status(200).json(auth);

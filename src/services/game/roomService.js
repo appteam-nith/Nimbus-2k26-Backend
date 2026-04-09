@@ -1,5 +1,67 @@
 import prisma from "../../config/prisma.js";
 
+// ─── BOT / DEV-MODE HELPERS ───────────────────────────────────────────────────
+
+function parseRoomMeta(raw) {
+  if (!raw) return {};
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+  return raw ?? {};
+}
+
+/**
+ * Cleans up a dev-mode room completely:
+ *   1. Deletes the GameRoom (cascades to GamePlayer + GameVote)
+ *   2. Deletes the bot User records that were registered for this game
+ *      (their IDs are stored in state_meta.bots)
+ *   3. Broad safety-net sweep: removes every User whose full_name starts
+ *      with "Bot " AND whose email ends with "@bot.local" — catches orphaned
+ *      bots left behind by any crashed or force-ended dev-mode sessions.
+ *
+ * Safe to call multiple times (all operations are idempotent).
+ */
+export async function cleanupDevRoom(roomCode) {
+  // 1. Read bot user IDs from state_meta BEFORE deleting the room.
+  const room = await prisma.gameRoom.findUnique({
+    where: { room_code: roomCode },
+    select: { state_meta: true },
+  });
+
+  if (!room) return; // already gone — nothing to do
+
+  const meta = parseRoomMeta(room.state_meta);
+  const bots = Array.isArray(meta.bots) ? meta.bots : [];
+  const botUserIds = bots.map((b) => b.userId).filter(Boolean);
+
+  // 2. Delete the room (cascade handles GamePlayer + GameVote).
+  await prisma.gameRoom
+    .delete({ where: { room_code: roomCode } })
+    .catch(() => {}); // ignore "record not found" if already deleted
+
+  // 3. Delete the bot User records that were part of this specific game.
+  if (botUserIds.length > 0) {
+    await prisma.user
+      .deleteMany({ where: { user_id: { in: botUserIds } } })
+      .catch(() => {});
+  }
+
+  // 4. Broad safety-net: wipe every remaining orphaned bot user.
+  //    Only matches the synthetic accounts we create (name "Bot …" + @bot.local email).
+  await prisma.user
+    .deleteMany({
+      where: {
+        full_name: { startsWith: "Bot ", mode: "insensitive" },
+        email: { endsWith: "@bot.local" },
+      },
+    })
+    .catch(() => {});
+}
+
 // ─── ROOM CODE GENERATOR ──────────────────────────────────────────────────────
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -7,7 +69,7 @@ const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function generateCode() {
   return Array.from(
     { length: 6 },
-    () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
+    () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)],
   ).join("");
 }
 
@@ -16,7 +78,9 @@ async function uniqueCode() {
   let exists = true;
   while (exists) {
     code = generateCode();
-    const room = await prisma.gameRoom.findUnique({ where: { room_code: code } });
+    const room = await prisma.gameRoom.findUnique({
+      where: { room_code: code },
+    });
     exists = !!room;
   }
   return code;
@@ -65,10 +129,12 @@ export async function getRoomState(roomCode, myUserId) {
   }));
 
   const myPlayer = room.players.find((p) => p.user_id === myUserId);
-  const timeRemaining =
-    room.phase_ends_at
-      ? Math.max(0, Math.floor((new Date(room.phase_ends_at) - Date.now()) / 1000))
-      : null;
+  const timeRemaining = room.phase_ends_at
+    ? Math.max(
+        0,
+        Math.floor((new Date(room.phase_ends_at) - Date.now()) / 1000),
+      )
+    : null;
 
   const aliveCount = room.players.filter((p) => p.status === "ALIVE").length;
   const discussionBaseSeconds =
@@ -88,10 +154,12 @@ export async function getRoomState(roomCode, myUserId) {
       ? rawDiscussionVotes[myUserId]
       : 0;
   const dayTimeDeltaSeconds =
-    aliveCount > 0 ? Math.max(1, Math.round(discussionBaseSeconds / aliveCount)) : 0;
+    aliveCount > 0
+      ? Math.max(1, Math.round(discussionBaseSeconds / aliveCount))
+      : 0;
 
   const bountyVipPlayer = room.players.find(
-    (p) => p.id === roomMeta.bounty_vip_player_id
+    (p) => p.id === roomMeta.bounty_vip_player_id,
   );
 
   return {
@@ -147,7 +215,8 @@ export async function joinRoom(roomCode, userId) {
   });
 
   if (!room) throw Object.assign(new Error("Room not found"), { status: 404 });
-  if (room.status !== "LOBBY") throw Object.assign(new Error("Game already in progress"), { status: 409 });
+  if (room.status !== "LOBBY")
+    throw Object.assign(new Error("Game already in progress"), { status: 409 });
 
   const limit = ROOM_SIZE_LIMITS[room.room_size];
   if (room._count.players >= limit)
@@ -209,7 +278,21 @@ export async function leaveRoom(roomCode, userId) {
       return { newHostId: newHost.user_id };
     }
   } else {
-    // If game started...
+    // Game already in progress — only act on dev-mode rooms.
+    const meta = parseRoomMeta(room.state_meta);
+
+    if (meta.dev_mode === true && room.status !== "ENDED") {
+      // Count non-bot players that are NOT the one currently leaving.
+      const realPlayersRemaining = room.players.filter(
+        (p) => p.user_id !== userId && !p.isBot,
+      );
+
+      if (realPlayersRemaining.length === 0) {
+        // Last real human just left — tear down the whole dev room.
+        await cleanupDevRoom(roomCode);
+        return { deleted: true };
+      }
+    }
   }
   return {};
 }
