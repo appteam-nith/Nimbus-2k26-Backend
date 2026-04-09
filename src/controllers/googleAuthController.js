@@ -91,6 +91,7 @@ const googleAuth = async (req, res) => {
         id: user.user_id,
         name: user.full_name,
         email: user.email,
+        nickname: user.nickname ?? null,
       },
     });
   } catch (error) {

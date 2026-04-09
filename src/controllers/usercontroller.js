@@ -63,13 +63,37 @@ const getUserProfile = async (req, res) => {
 
 const updateUserProfile = async (req, res) => {
   try {
-    const { name } = req.body;
-    if (!name) return res.status(400).json({ error: "No fields to update provided" });
+    const { name, nickname } = req.body ?? {};
+
+    const hasName = typeof name === "string";
+    const hasNickname = typeof nickname === "string" || nickname === null;
+
+    if (!hasName && !hasNickname) {
+      return res.status(400).json({ error: "No fields to update provided" });
+    }
+
+    const trimmedName = hasName ? name.trim() : undefined;
+    if (hasName && !trimmedName) {
+      return res.status(400).json({ error: "Name cannot be empty" });
+    }
+
+    let normalizedNickname;
+    if (hasNickname) {
+      if (nickname === null) {
+        normalizedNickname = null;
+      } else {
+        const trimmedNickname = nickname.trim();
+        normalizedNickname = trimmedNickname.length === 0 ? null : trimmedNickname;
+      }
+    }
 
     const existing = await getRequestUser(req);
     if (!existing) return res.status(404).json({ error: "User not found" });
 
-    const user = await updateUser(existing.user_id, { name });
+    const user = await updateUser(existing.user_id, {
+      name: trimmedName,
+      nickname: normalizedNickname,
+    });
     res.json({ success: true, message: "Profile updated", user });
   } catch (error) {
     res.status(500).json({ error: error.message });
