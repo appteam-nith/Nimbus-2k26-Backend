@@ -78,6 +78,7 @@ model User {
   google_id     String?  @unique
   full_name     String
   email         String   @unique
+  nickname      String?
   password_hash String?  // null for Google OAuth users
   is_verified   Boolean  @default(false) // true for Google users; email users must verify
   created_at    DateTime @default(now())
