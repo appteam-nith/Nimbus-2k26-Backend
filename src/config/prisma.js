@@ -85,10 +85,38 @@ async function ensureUserColumns() {
     // Ensure leaderboard columns exist
     if (!colNames.includes('experience')) {
       await pool.query(
-        'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "experience" INTEGER DEFAULT 0;',
+        'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "experience" INTEGER DEFAULT 1000;',
       );
       console.log('✅ Ensured User.experience column exists');
     }
+    // Keep new-user baseline aligned to the rating system.
+    await pool.query(
+      'ALTER TABLE "User" ALTER COLUMN "experience" SET DEFAULT 1000;'
+    );
+    // Safety clamp before enforcing DB-level non-negative constraint.
+    await pool.query(
+      'UPDATE "User" SET "experience" = 0 WHERE "experience" < 0;'
+    );
+    await pool.query(
+      'UPDATE "User" SET "experience" = 1000 WHERE "experience" IS NULL;'
+    );
+    await pool.query(
+      'ALTER TABLE "User" ALTER COLUMN "experience" SET NOT NULL;'
+    );
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'User_experience_non_negative'
+        ) THEN
+          ALTER TABLE "User"
+          ADD CONSTRAINT "User_experience_non_negative"
+          CHECK ("experience" >= 0);
+        END IF;
+      END $$;
+    `);
 
     if (!colNames.includes('experience_updated_at')) {
       await pool.query(

@@ -49,6 +49,35 @@ export const PHASE_DURATION = {
 
 // Hitman actions resolve 5s before end of night
 const HITMAN_EARLY_MS = 5_000;
+const BASE_EXPERIENCE = 1000;
+const MAFIA_RATING_ROLES = new Set(["MAFIA", "MAFIA_HELPER", "HITMAN"]);
+
+class RatingSystem {
+  static K_WIN = 200;
+  static K_LOSS = 12.5;
+
+  static getWinGain(currentRating) {
+    // Enforce a minimum rating floor to prevent Infinity from divide-by-zero
+    const safeRating = Math.max(10, currentRating);
+    const gain = this.K_WIN / Math.log10(safeRating);
+    return Math.round(gain);
+  }
+
+  static getLossPenalty(currentRating) {
+    const safeRating = Math.max(10, currentRating);
+    const penalty = this.K_LOSS * Math.log10(safeRating);
+    return -Math.round(penalty);
+  }
+}
+
+function isMafiaSideForRating(role) {
+  return MAFIA_RATING_ROLES.has(role);
+}
+
+function isWinningSideForRating(role, winner) {
+  const isMafiaSide = isMafiaSideForRating(role);
+  return winner === "MAFIA" ? isMafiaSide : !isMafiaSide;
+}
 
 // ─── HELPERS: state_meta read/write ───────────────────────────────────────────
 
@@ -755,6 +784,51 @@ async function endGame(roomCode, winner) {
     include: { user: { select: { full_name: true } } },
   });
 
+  const ratingUpdates = [];
+  const ratingByUserId = new Map();
+
+  for (const p of allPlayers) {
+    if (p.isBot) continue;
+    if (!p.role) continue;
+
+    const expRows = await prisma.$queryRaw`
+      SELECT experience
+      FROM "User"
+      WHERE user_id = ${p.user_id}::uuid
+      LIMIT 1
+    `;
+    const currentExperience = Math.max(
+      0,
+      Number(expRows?.[0]?.experience ?? BASE_EXPERIENCE)
+    );
+    const didWin = isWinningSideForRating(p.role, winner);
+    const delta = didWin
+      ? RatingSystem.getWinGain(currentExperience)
+      : RatingSystem.getLossPenalty(currentExperience);
+    const nextExperience = Math.max(0, currentExperience + delta);
+
+    ratingByUserId.set(p.user_id, {
+      previous: currentExperience,
+      delta,
+      next: nextExperience,
+    });
+
+    if (nextExperience !== currentExperience) {
+      ratingUpdates.push(
+        prisma.$executeRaw`
+          UPDATE "User"
+          SET experience = ${nextExperience},
+              experience_updated_at = NOW()
+          WHERE user_id = ${p.user_id}::uuid
+        `
+      );
+    }
+  }
+
+  if (ratingUpdates.length > 0) {
+    await prisma.$transaction(ratingUpdates);
+  }
+
   await prisma.gameRoom.update({
     where: { room_code: roomCode },
     data: { status: "ENDED", winner },
@@ -767,6 +841,8 @@ async function endGame(roomCode, winner) {
       name: p.user.full_name,
       role: p.role,
       status: p.status,
+      ratingDelta: ratingByUserId.get(p.user_id)?.delta ?? 0,
+      experience: ratingByUserId.get(p.user_id)?.next ?? BASE_EXPERIENCE,
     })),
   });
 }
