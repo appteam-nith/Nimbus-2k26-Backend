@@ -165,6 +165,13 @@ app.use("/api/users", UserRoutes);
 app.use("/api/coreteam", CoreTeamRoutes);
 app.use("/api/game", GameRoutes);
 
+app.get("/api/config/update", (req, res) => {
+  res.json({
+    requiredVersionCode: process.env.REQUIRED_VERSION_CODE ? parseInt(process.env.REQUIRED_VERSION_CODE) : 7,
+    playStoreUrl: process.env.PLAYSTORE_URL || "https://play.google.com/store/apps/details?id=com.nith.nimbus2k26"
+  });
+});
+
 app.use(errorHandler);
 
 app.listen(PORT, () => {
