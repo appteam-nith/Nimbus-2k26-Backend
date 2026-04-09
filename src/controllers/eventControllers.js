@@ -63,7 +63,7 @@ export const getAllEvents = async (req, res) => {
       },
     });
 
-    res.status(200).json({ events });
+    res.status(200).json({ data: events });
   } catch (error) {
     console.error("Error fetching all events:", error.message);
     res.status(500).json({ error: error.message });
