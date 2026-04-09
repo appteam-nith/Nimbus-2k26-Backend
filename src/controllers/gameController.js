@@ -3,6 +3,7 @@ import pusher from "../config/pusher.js";
 import { createRoom, joinRoom, getRoomState } from "../services/game/roomService.js";
 import { startGame } from "../services/game/gameService.js";
 import { submitVote } from "../services/game/voteService.js";
+import { PHASE_DURATION } from "../services/game/resolveService.js";
 
 // ─── PHASE GUARD MAP ──────────────────────────────────────────────────────────
 // Each vote_type is only valid in certain game phases
@@ -518,6 +519,169 @@ export const handleVote = async (req, res) => {
 
 // ─── CHAT ─────────────────────────────────────────────────────────────────────
 
+export const handleAdjustDayTime = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { room_code, adjustment } = req.body;
+    const parsedAdjustment = Number(adjustment);
+
+    if (!room_code || ![-1, 0, 1].includes(parsedAdjustment)) {
+      return res.status(400).json({
+        error: "room_code and adjustment (-1, 0, 1) are required",
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT room_code
+        FROM "GameRoom"
+        WHERE room_code = ${room_code}
+        FOR UPDATE
+      `;
+
+      const room = await tx.gameRoom.findUnique({
+        where: { room_code },
+        select: { status: true, round: true, state_meta: true },
+      });
+      if (!room) {
+        throw Object.assign(new Error("Room not found"), { status: 404 });
+      }
+      if (room.status !== "DISCUSSION") {
+        throw Object.assign(
+          new Error("Day time can only be adjusted during DISCUSSION"),
+          { status: 409 }
+        );
+      }
+
+      const me = await tx.gamePlayer.findUnique({
+        where: { room_code_user_id: { room_code, user_id: userId } },
+        select: { status: true },
+      });
+      if (!me) {
+        throw Object.assign(new Error("Player not in room"), { status: 404 });
+      }
+      if (me.status !== "ALIVE") {
+        throw Object.assign(
+          new Error("Eliminated players cannot adjust day time"),
+          { status: 403 }
+        );
+      }
+
+      const aliveCount = await tx.gamePlayer.count({
+        where: { room_code, status: "ALIVE" },
+      });
+      if (aliveCount <= 0) {
+        throw Object.assign(new Error("No alive players in room"), {
+          status: 409,
+        });
+      }
+
+      const meta = parseStateMeta(room.state_meta);
+      const baseSeconds =
+        typeof meta.discussion_base_seconds === "number" &&
+        meta.discussion_base_seconds > 0
+          ? meta.discussion_base_seconds
+          : Math.floor(PHASE_DURATION.DISCUSSION / 1000);
+
+      const isCurrentRound = meta.discussion_time_vote_round === room.round;
+      const rawVotes =
+        isCurrentRound &&
+        meta.discussion_time_votes &&
+        typeof meta.discussion_time_votes === "object" &&
+        !Array.isArray(meta.discussion_time_votes)
+          ? { ...meta.discussion_time_votes }
+          : {};
+
+      const votes = {};
+      for (const [uid, value] of Object.entries(rawVotes)) {
+        if (value === 1 || value === -1) votes[uid] = value;
+      }
+
+      if (parsedAdjustment === 0) {
+        delete votes[userId];
+      } else {
+        votes[userId] = parsedAdjustment;
+      }
+
+      const deltaSeconds = Math.max(1, Math.round(baseSeconds / aliveCount));
+      const netAdjustment = Object.values(votes).reduce(
+        (sum, value) => sum + (value === 1 || value === -1 ? value : 0),
+        0
+      );
+
+      const startRaw = isCurrentRound ? meta.discussion_phase_started_at : null;
+      const startMs = startRaw ? Date.parse(startRaw) : NaN;
+      const discussionStartAt = Number.isFinite(startMs)
+        ? new Date(startMs)
+        : new Date();
+
+      const phaseEndsAt = new Date(
+        discussionStartAt.getTime() +
+          (baseSeconds + netAdjustment * deltaSeconds) * 1000
+      );
+
+      const nextMeta = {
+        ...meta,
+        discussion_base_seconds: baseSeconds,
+        discussion_time_vote_round: room.round,
+        discussion_phase_started_at: discussionStartAt.toISOString(),
+        discussion_time_votes: votes,
+      };
+
+      await tx.gameRoom.update({
+        where: { room_code },
+        data: {
+          phase_ends_at: phaseEndsAt,
+          state_meta: nextMeta,
+        },
+      });
+
+      const increaseVotes = Object.values(votes).filter(
+        (value) => value === 1
+      ).length;
+      const decreaseVotes = Object.values(votes).filter(
+        (value) => value === -1
+      ).length;
+
+      return {
+        round: room.round,
+        phaseEndsAt,
+        adjustment: votes[userId] ?? 0,
+        deltaSeconds,
+        netAdjustment,
+        aliveCount,
+        increaseVotes,
+        decreaseVotes,
+      };
+    });
+
+    await pusher.trigger(`game-${room_code}`, "day-time-updated", {
+      phase: "DISCUSSION",
+      round: result.round,
+      phaseEndsAt: result.phaseEndsAt.toISOString(),
+      aliveCount: result.aliveCount,
+      deltaSeconds: result.deltaSeconds,
+      netAdjustment: result.netAdjustment,
+      increaseVotes: result.increaseVotes,
+      decreaseVotes: result.decreaseVotes,
+    });
+
+    return res.status(200).json({
+      success: true,
+      phaseEndsAt: result.phaseEndsAt.toISOString(),
+      adjustment: result.adjustment,
+      deltaSeconds: result.deltaSeconds,
+      netAdjustment: result.netAdjustment,
+      aliveCount: result.aliveCount,
+      increaseVotes: result.increaseVotes,
+      decreaseVotes: result.decreaseVotes,
+    });
+  } catch (err) {
+    console.error("[adjustDayTime]", err.message);
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+};
+
 export const handleChat = async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -529,7 +693,12 @@ export const handleChat = async (req, res) => {
 
     const room = await prisma.gameRoom.findUnique({
       where: { room_code },
-      select: { status: true, state_meta: true, nurse_met_doctor: true },
+      select: {
+        status: true,
+        state_meta: true,
+        nurse_met_doctor: true,
+        room_size: true,
+      },
     });
     if (!room) return res.status(404).json({ error: "Room not found" });
 
@@ -561,11 +730,18 @@ export const handleChat = async (req, res) => {
       if (room.status !== "NIGHT") {
         return res.status(409).json({ error: "Doctor-Nurse chat is only available during NIGHT" });
       }
+      if (room.room_size !== "TWELVE") {
+        return res
+          .status(403)
+          .json({ error: "Doctor-Nurse chat is only available in 12-player rooms" });
+      }
       if (!["DOCTOR", "NURSE"].includes(player.role)) {
         return res.status(403).json({ error: "Only Doctor and Nurse can use this channel" });
       }
-      if (player.role === "NURSE" && !room.nurse_met_doctor) {
-        return res.status(403).json({ error: "Nurse has not met the Doctor yet" });
+      if (!room.nurse_met_doctor) {
+        return res
+          .status(403)
+          .json({ error: "Doctor and Nurse can chat only after they meet" });
       }
       targetChannel = `private-doc-${room_code}`;
     } else if (channel === "citizen") {
@@ -658,19 +834,23 @@ export const handlePusherAuth = async (req, res) => {
 
       const room = await prisma.gameRoom.findUnique({
         where: { room_code: roomCode },
-        select: { nurse_met_doctor: true },
+        select: { nurse_met_doctor: true, room_size: true },
       });
-
-      if (player.role === "DOCTOR") {
-        // Doctor can always access this channel (even before nurse meets)
-        const auth = pusher.authorizeChannel(socketId, channel);
-        return res.status(200).json(auth);
+      if (room?.room_size !== "TWELVE") {
+        return res
+          .status(403)
+          .json({ error: "Doc channel is only available in 12-player rooms" });
       }
-      if (player.role === "NURSE" && room?.nurse_met_doctor) {
-        const auth = pusher.authorizeChannel(socketId, channel);
-        return res.status(200).json(auth);
+      if (!room.nurse_met_doctor) {
+        return res
+          .status(403)
+          .json({ error: "Doc channel unlocks only after Doctor and Nurse meet" });
       }
-      return res.status(403).json({ error: "Not authorized for doc channel" });
+      if (!["DOCTOR", "NURSE"].includes(player.role)) {
+        return res.status(403).json({ error: "Not authorized for doc channel" });
+      }
+      const auth = pusher.authorizeChannel(socketId, channel);
+      return res.status(200).json(auth);
     }
 
     // ── Private hitman-mafia channel: private-hitman-{roomCode} ────────────

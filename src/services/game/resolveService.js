@@ -41,14 +41,43 @@ import {
 
 // ─── PHASE DURATIONS (ms) ─────────────────────────────────────────────────────
 export const PHASE_DURATION = {
-  NIGHT: 15_000,
-  DISCUSSION: 30_000,
+  NIGHT: 30_000,
+  DISCUSSION: 120_000,
   VOTING: 10_000,
   REVEAL: 3_000,
 };
 
 // Hitman actions resolve 5s before end of night
 const HITMAN_EARLY_MS = 5_000;
+const BASE_EXPERIENCE = 1000;
+const MAFIA_RATING_ROLES = new Set(["MAFIA", "MAFIA_HELPER", "HITMAN"]);
+
+class RatingSystem {
+  static K_WIN = 200;
+  static K_LOSS = 12.5;
+
+  static getWinGain(currentRating) {
+    // Enforce a minimum rating floor to prevent Infinity from divide-by-zero
+    const safeRating = Math.max(10, currentRating);
+    const gain = this.K_WIN / Math.log10(safeRating);
+    return Math.round(gain);
+  }
+
+  static getLossPenalty(currentRating) {
+    const safeRating = Math.max(10, currentRating);
+    const penalty = this.K_LOSS * Math.log10(safeRating);
+    return -Math.round(penalty);
+  }
+}
+
+function isMafiaSideForRating(role) {
+  return MAFIA_RATING_ROLES.has(role);
+}
+
+function isWinningSideForRating(role, winner) {
+  const isMafiaSide = isMafiaSideForRating(role);
+  return winner === "MAFIA" ? isMafiaSide : !isMafiaSide;
+}
 
 // ─── HELPERS: state_meta read/write ───────────────────────────────────────────
 
@@ -578,10 +607,21 @@ async function resolveNightEnd(room) {
     return;
   }
 
-  const phaseEndsAt = new Date(Date.now() + PHASE_DURATION.DISCUSSION);
+  const discussionStartAt = new Date();
+  const discussionEndsAt = new Date(
+    discussionStartAt.getTime() + PHASE_DURATION.DISCUSSION
+  );
+
+  await setMeta(room_code, {
+    discussion_time_vote_round: round,
+    discussion_time_votes: {},
+    discussion_phase_started_at: discussionStartAt.toISOString(),
+    discussion_base_seconds: Math.floor(PHASE_DURATION.DISCUSSION / 1000),
+  });
+
   await prisma.gameRoom.update({
     where: { room_code },
-    data: { status: "DISCUSSION", phase_ends_at: phaseEndsAt },
+    data: { status: "DISCUSSION", phase_ends_at: discussionEndsAt },
   });
 
   await pusher.trigger(`game-${room_code}`, "phase-resolved", {
@@ -599,7 +639,8 @@ async function resolveNightEnd(room) {
           exposedRole: reporterResult.exposedRole,
         }
       : null,
-    phaseEndsAt: phaseEndsAt.toISOString(),
+    peacefulNight: allDeaths.length === 0,
+    phaseEndsAt: discussionEndsAt.toISOString(),
   });
 }
 
@@ -607,6 +648,12 @@ async function resolveNightEnd(room) {
 
 async function resolveDiscussion(room) {
   const { room_code, round } = room;
+
+  await setMeta(room_code, {
+    discussion_time_vote_round: null,
+    discussion_time_votes: {},
+    discussion_phase_started_at: null,
+  });
 
   const phaseEndsAt = new Date(Date.now() + PHASE_DURATION.VOTING);
   await prisma.gameRoom.update({
@@ -630,12 +677,19 @@ async function resolveVoting(room) {
   const lynchTargetId = findLynchTarget(tally);
 
   let eliminated = null;
+  let eliminatedUserId = null;
   if (lynchTargetId) {
     await prisma.gamePlayer.update({
       where: { id: lynchTargetId },
       data: { status: "ELIMINATED" },
     });
     eliminated = lynchTargetId;
+
+    const eliminatedPlayer = await prisma.gamePlayer.findUnique({
+      where: { id: lynchTargetId },
+      select: { user_id: true },
+    });
+    eliminatedUserId = eliminatedPlayer?.user_id ?? null;
 
     await prisma.gameRoom.update({
       where: { room_code },
@@ -655,6 +709,7 @@ async function resolveVoting(room) {
       phase: "REVEAL",
       round,
       eliminatedPlayerId: eliminated,
+      eliminatedPlayerUserId: eliminatedUserId,
       phaseEndsAt: phaseEndsAt.toISOString(),
     });
     setTimeout(() => endGame(room_code, winner), PHASE_DURATION.REVEAL);
@@ -671,6 +726,7 @@ async function resolveVoting(room) {
       phase: "REVEAL",
       round,
       eliminatedPlayerId: eliminated,
+      eliminatedPlayerUserId: eliminatedUserId,
       phaseEndsAt: phaseEndsAt.toISOString(),
     });
     setTimeout(
@@ -698,6 +754,9 @@ async function advanceToNight(roomCode, nextRound) {
     hitman_resolved: false,
     night_resolved: false,
     early_deaths: [],
+    discussion_time_vote_round: null,
+    discussion_time_votes: {},
+    discussion_phase_started_at: null,
   };
 
   await prisma.gameRoom.update({
@@ -714,6 +773,7 @@ async function advanceToNight(roomCode, nextRound) {
   await pusher.trigger(`game-${roomCode}`, "phase-resolved", {
     phase: "NIGHT",
     round: nextRound,
+    nightBegins: true,
     phaseEndsAt: phaseEndsAt.toISOString(),
   });
 }
@@ -723,6 +783,51 @@ async function endGame(roomCode, winner) {
     where: { room_code: roomCode },
     include: { user: { select: { full_name: true } } },
   });
+
+  const ratingUpdates = [];
+  const ratingByUserId = new Map();
+
+  for (const p of allPlayers) {
+    if (p.isBot) continue;
+    if (!p.role) continue;
+
+    const expRows = await prisma.$queryRaw`
+      SELECT experience
+      FROM "User"
+      WHERE user_id = ${p.user_id}::uuid
+      LIMIT 1
+    `;
+    const currentExperience = Math.max(
+      0,
+      Number(expRows?.[0]?.experience ?? BASE_EXPERIENCE)
+    );
+    const didWin = isWinningSideForRating(p.role, winner);
+    const delta = didWin
+      ? RatingSystem.getWinGain(currentExperience)
+      : RatingSystem.getLossPenalty(currentExperience);
+    const nextExperience = Math.max(0, currentExperience + delta);
+
+    ratingByUserId.set(p.user_id, {
+      previous: currentExperience,
+      delta,
+      next: nextExperience,
+    });
+
+    if (nextExperience !== currentExperience) {
+      ratingUpdates.push(
+        prisma.$executeRaw`
+          UPDATE "User"
+          SET experience = ${nextExperience},
+              experience_updated_at = NOW()
+          WHERE user_id = ${p.user_id}::uuid
+        `
+      );
+    }
+  }
+
+  if (ratingUpdates.length > 0) {
+    await prisma.$transaction(ratingUpdates);
+  }
 
   await prisma.gameRoom.update({
     where: { room_code: roomCode },
@@ -736,6 +841,8 @@ async function endGame(roomCode, winner) {
       name: p.user.full_name,
       role: p.role,
       status: p.status,
+      ratingDelta: ratingByUserId.get(p.user_id)?.delta ?? 0,
+      experience: ratingByUserId.get(p.user_id)?.next ?? BASE_EXPERIENCE,
     })),
   });
 }

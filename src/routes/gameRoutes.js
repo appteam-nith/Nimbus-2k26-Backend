@@ -7,6 +7,7 @@ import {
   handleGetRoom,
   handleStartGame,
   handleVote,
+  handleAdjustDayTime,
   handleChat,
   handlePusherAuth,
   handleListRooms,
@@ -27,6 +28,7 @@ router.get("/rooms/:code", handleGetRoom);         // Get room state (reconnect)
 // ─── GAME ─────────────────────────────────────────────────────────────────────
 router.post("/start", handleStartGame);            // Host starts game
 router.post("/vote", handleVote);                  // Vote / night action
+router.post("/day-time", handleAdjustDayTime);     // Discussion timer adjust (+/-)
 
 // ─── CHAT ─────────────────────────────────────────────────────────────────────
 router.post("/chat", handleChat);                  // Send chat (DISCUSSION only)

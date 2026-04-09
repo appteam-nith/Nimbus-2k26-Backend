@@ -82,6 +82,10 @@ model User {
   is_verified   Boolean  @default(false) // true for Google users; email users must verify
   created_at    DateTime @default(now())
 
+  // Experience for leaderboard (total points)
+  experience               Int      @default(1000)
+  experience_updated_at    DateTime @default(now())
+
   game_players GamePlayer[]
   hosted_rooms GameRoom[]   @relation("RoomHost")
 }

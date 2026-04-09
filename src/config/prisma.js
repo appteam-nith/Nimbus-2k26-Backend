@@ -81,6 +81,58 @@ async function ensureUserColumns() {
     await pool.query(
       'CREATE UNIQUE INDEX IF NOT EXISTS "User_google_id_key" ON "User" ("google_id") WHERE "google_id" IS NOT NULL;',
     );
+
+    // Ensure leaderboard columns exist
+    if (!colNames.includes('experience')) {
+      await pool.query(
+        'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "experience" INTEGER DEFAULT 1000;',
+      );
+      console.log('✅ Ensured User.experience column exists');
+    }
+    // Keep new-user baseline aligned to the rating system.
+    await pool.query(
+      'ALTER TABLE "User" ALTER COLUMN "experience" SET DEFAULT 1000;'
+    );
+    // Safety clamp before enforcing DB-level non-negative constraint.
+    await pool.query(
+      'UPDATE "User" SET "experience" = 0 WHERE "experience" < 0;'
+    );
+    await pool.query(
+      'UPDATE "User" SET "experience" = 1000 WHERE "experience" IS NULL;'
+    );
+    await pool.query(
+      'ALTER TABLE "User" ALTER COLUMN "experience" SET NOT NULL;'
+    );
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'User_experience_non_negative'
+        ) THEN
+          ALTER TABLE "User"
+          ADD CONSTRAINT "User_experience_non_negative"
+          CHECK ("experience" >= 0);
+        END IF;
+      END $$;
+    `);
+
+    if (!colNames.includes('experience_updated_at')) {
+      await pool.query(
+        'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "experience_updated_at" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;',
+      );
+      // Backfill nulls with created_at for consistency
+      await pool.query(
+        'UPDATE "User" SET "experience_updated_at" = created_at WHERE "experience_updated_at" IS NULL;'
+      );
+      console.log('✅ Ensured User.experience_updated_at column exists');
+    }
+
+    // Index to support leaderboard ordering: experience desc, timestamp asc, name asc
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS "User_experience_idx" ON "User" ("experience" DESC, "experience_updated_at" ASC, "full_name" ASC);'
+    );
   } catch (e) {
     console.error('❌ Failed to ensure User table compatibility:', e.message);
   }
