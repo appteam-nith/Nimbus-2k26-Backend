@@ -16,6 +16,7 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
+    "build": "echo 'no build needed'",
     "start": "node src/index.js",
     "test": "node test/api-test.js",
     "test:local": "node test/api-test.js --local",
