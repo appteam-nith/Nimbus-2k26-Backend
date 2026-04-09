@@ -63,6 +63,8 @@ const findUserById = async (userId) => {
       full_name: true,
       email: true,
       created_at: true,
+      experience: true,
+      experience_updated_at: true,
     },
   });
 };

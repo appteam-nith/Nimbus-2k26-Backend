@@ -41,8 +41,8 @@ import {
 
 // ─── PHASE DURATIONS (ms) ─────────────────────────────────────────────────────
 export const PHASE_DURATION = {
-  NIGHT: 15_000,
-  DISCUSSION: 30_000,
+  NIGHT: 30_000,
+  DISCUSSION: 120_000,
   VOTING: 10_000,
   REVEAL: 3_000,
 };
@@ -578,10 +578,21 @@ async function resolveNightEnd(room) {
     return;
   }
 
-  const phaseEndsAt = new Date(Date.now() + PHASE_DURATION.DISCUSSION);
+  const discussionStartAt = new Date();
+  const discussionEndsAt = new Date(
+    discussionStartAt.getTime() + PHASE_DURATION.DISCUSSION
+  );
+
+  await setMeta(room_code, {
+    discussion_time_vote_round: round,
+    discussion_time_votes: {},
+    discussion_phase_started_at: discussionStartAt.toISOString(),
+    discussion_base_seconds: Math.floor(PHASE_DURATION.DISCUSSION / 1000),
+  });
+
   await prisma.gameRoom.update({
     where: { room_code },
-    data: { status: "DISCUSSION", phase_ends_at: phaseEndsAt },
+    data: { status: "DISCUSSION", phase_ends_at: discussionEndsAt },
   });
 
   await pusher.trigger(`game-${room_code}`, "phase-resolved", {
@@ -599,7 +610,8 @@ async function resolveNightEnd(room) {
           exposedRole: reporterResult.exposedRole,
         }
       : null,
-    phaseEndsAt: phaseEndsAt.toISOString(),
+    peacefulNight: allDeaths.length === 0,
+    phaseEndsAt: discussionEndsAt.toISOString(),
   });
 }
 
@@ -607,6 +619,12 @@ async function resolveNightEnd(room) {
 
 async function resolveDiscussion(room) {
   const { room_code, round } = room;
+
+  await setMeta(room_code, {
+    discussion_time_vote_round: null,
+    discussion_time_votes: {},
+    discussion_phase_started_at: null,
+  });
 
   const phaseEndsAt = new Date(Date.now() + PHASE_DURATION.VOTING);
   await prisma.gameRoom.update({
@@ -630,12 +648,19 @@ async function resolveVoting(room) {
   const lynchTargetId = findLynchTarget(tally);
 
   let eliminated = null;
+  let eliminatedUserId = null;
   if (lynchTargetId) {
     await prisma.gamePlayer.update({
       where: { id: lynchTargetId },
       data: { status: "ELIMINATED" },
     });
     eliminated = lynchTargetId;
+
+    const eliminatedPlayer = await prisma.gamePlayer.findUnique({
+      where: { id: lynchTargetId },
+      select: { user_id: true },
+    });
+    eliminatedUserId = eliminatedPlayer?.user_id ?? null;
 
     await prisma.gameRoom.update({
       where: { room_code },
@@ -655,6 +680,7 @@ async function resolveVoting(room) {
       phase: "REVEAL",
       round,
       eliminatedPlayerId: eliminated,
+      eliminatedPlayerUserId: eliminatedUserId,
       phaseEndsAt: phaseEndsAt.toISOString(),
     });
     setTimeout(() => endGame(room_code, winner), PHASE_DURATION.REVEAL);
@@ -671,6 +697,7 @@ async function resolveVoting(room) {
       phase: "REVEAL",
       round,
       eliminatedPlayerId: eliminated,
+      eliminatedPlayerUserId: eliminatedUserId,
       phaseEndsAt: phaseEndsAt.toISOString(),
     });
     setTimeout(
@@ -698,6 +725,9 @@ async function advanceToNight(roomCode, nextRound) {
     hitman_resolved: false,
     night_resolved: false,
     early_deaths: [],
+    discussion_time_vote_round: null,
+    discussion_time_votes: {},
+    discussion_phase_started_at: null,
   };
 
   await prisma.gameRoom.update({
@@ -714,6 +744,7 @@ async function advanceToNight(roomCode, nextRound) {
   await pusher.trigger(`game-${roomCode}`, "phase-resolved", {
     phase: "NIGHT",
     round: nextRound,
+    nightBegins: true,
     phaseEndsAt: phaseEndsAt.toISOString(),
   });
 }

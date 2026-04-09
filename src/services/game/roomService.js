@@ -50,6 +50,7 @@ export async function getRoomState(roomCode, myUserId) {
   const bots = Array.isArray(roomMeta.bots) ? roomMeta.bots : [];
 
   const players = room.players.map((p) => ({
+    playerId: p.id,
     userId: p.user_id,
     name: p.user.full_name,
     status: p.status,
@@ -68,6 +69,26 @@ export async function getRoomState(roomCode, myUserId) {
     room.phase_ends_at
       ? Math.max(0, Math.floor((new Date(room.phase_ends_at) - Date.now()) / 1000))
       : null;
+
+  const aliveCount = room.players.filter((p) => p.status === "ALIVE").length;
+  const discussionBaseSeconds =
+    typeof roomMeta.discussion_base_seconds === "number" &&
+    roomMeta.discussion_base_seconds > 0
+      ? roomMeta.discussion_base_seconds
+      : 120;
+  const rawDiscussionVotes =
+    roomMeta.discussion_time_vote_round === room.round &&
+    roomMeta.discussion_time_votes &&
+    typeof roomMeta.discussion_time_votes === "object" &&
+    !Array.isArray(roomMeta.discussion_time_votes)
+      ? roomMeta.discussion_time_votes
+      : {};
+  const myDayTimeAdjustment =
+    rawDiscussionVotes[myUserId] === 1 || rawDiscussionVotes[myUserId] === -1
+      ? rawDiscussionVotes[myUserId]
+      : 0;
+  const dayTimeDeltaSeconds =
+    aliveCount > 0 ? Math.max(1, Math.round(discussionBaseSeconds / aliveCount)) : 0;
 
   const bountyVipPlayer = room.players.find(
     (p) => p.id === roomMeta.bounty_vip_player_id
@@ -90,6 +111,8 @@ export async function getRoomState(roomCode, myUserId) {
     reporterUsed: roomMeta.reporter_used === true,
     hitmanMetMafia: roomMeta.hitman_met_mafia === true,
     bountyVipUserId: bountyVipPlayer?.user_id || null,
+    myDayTimeAdjustment,
+    dayTimeDeltaSeconds,
     devMode: isDevMode,
   };
 }

@@ -81,6 +81,30 @@ async function ensureUserColumns() {
     await pool.query(
       'CREATE UNIQUE INDEX IF NOT EXISTS "User_google_id_key" ON "User" ("google_id") WHERE "google_id" IS NOT NULL;',
     );
+
+    // Ensure leaderboard columns exist
+    if (!colNames.includes('experience')) {
+      await pool.query(
+        'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "experience" INTEGER DEFAULT 0;',
+      );
+      console.log('✅ Ensured User.experience column exists');
+    }
+
+    if (!colNames.includes('experience_updated_at')) {
+      await pool.query(
+        'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "experience_updated_at" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;',
+      );
+      // Backfill nulls with created_at for consistency
+      await pool.query(
+        'UPDATE "User" SET "experience_updated_at" = created_at WHERE "experience_updated_at" IS NULL;'
+      );
+      console.log('✅ Ensured User.experience_updated_at column exists');
+    }
+
+    // Index to support leaderboard ordering: experience desc, timestamp asc, name asc
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS "User_experience_idx" ON "User" ("experience" DESC, "experience_updated_at" ASC, "full_name" ASC);'
+    );
   } catch (e) {
     console.error('❌ Failed to ensure User table compatibility:', e.message);
   }

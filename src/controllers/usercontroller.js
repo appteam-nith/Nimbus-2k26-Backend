@@ -3,6 +3,7 @@ import {
   updateUser,
   deleteUser,
 } from "../services/user/userService.js";
+import prisma from "../config/prisma.js";
 // import admin from "../config/firebase.js";
 
 // ─── PROTECTED PROFILE ────────────────────────────────────────────────────────
@@ -17,7 +18,44 @@ const getUserProfile = async (req, res) => {
   try {
     const user = await getRequestUser(req);
     if (!user) return res.status(404).json({ error: "User not found" });
-    res.json({ success: true, user });
+    // Compute user's leaderboard rank based on ordering:
+    // 1) experience (desc), 2) experience_updated_at (asc), 3) full_name (asc)
+    const userExp = user.experience ?? 0;
+    const userExpTs = user.experience_updated_at ?? user.created_at;
+    const userName = user.full_name ?? "";
+
+    const aheadCount = await prisma.user.count({
+      where: {
+        OR: [
+          { experience: { gt: userExp } },
+          {
+            AND: [
+              { experience: { equals: userExp } },
+              { experience_updated_at: { lt: userExpTs } },
+            ],
+          },
+          {
+            AND: [
+              { experience: { equals: userExp } },
+              { experience_updated_at: { equals: userExpTs } },
+              { full_name: { lt: userName } },
+            ],
+          },
+        ],
+      },
+    });
+
+    const rank = aheadCount + 1;
+
+    res.json({
+      success: true,
+      user,
+      // Backwards-compatible keys expected by frontend
+      points: userExp,
+      mafia_points: userExp,
+      rank,
+      mafia_rank: rank,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -13,6 +13,7 @@ import {
   updateBalance,
   deleteAccount,
 } from "../controllers/usercontroller.js";
+import { handleLeaderboard } from "../controllers/leaderboardController.js";
 import protect from "../middlewares/authMiddleware.js";
 
 const router = Router();
@@ -32,6 +33,9 @@ router.get("/profile", protect, getUserProfile);
 router.put("/profile", protect, updateUserProfile);
 router.delete("/profile", protect, deleteAccount);
 router.put("/balance", protect, updateBalance);
+
+// Public leaderboard
+router.get("/leaderboard", handleLeaderboard);
 
 export default router;
 
