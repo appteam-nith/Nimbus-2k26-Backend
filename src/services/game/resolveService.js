@@ -1,5 +1,6 @@
 import prisma from "../../config/prisma.js";
 import pusher from "../../config/pusher.js";
+import { cleanupDevRoom } from "./roomService.js";
 import {
   getMafiaTarget,
   getDoctorSave,
@@ -37,7 +38,6 @@ import {
 // - phase_ends_at = null: Atomic lock for night resolution
 // - Fresh DB queries: Always re-fetch before critical operations
 // ═════════════════════════════════════════════════════════════════════════════
-
 
 // ─── PHASE DURATIONS (ms) ─────────────────────────────────────────────────────
 export const PHASE_DURATION = {
@@ -94,7 +94,7 @@ async function setMeta(roomCode, patch) {
   });
   const current = getMeta(room);
   const merged = { ...current, ...patch };
-  
+
   // FIX: Use atomic update to prevent concurrent write loss
   await prisma.gameRoom.update({
     where: { room_code: roomCode },
@@ -114,14 +114,19 @@ async function setMetaAtomic(roomCode, patch, expectedCurrent = null) {
   try {
     const result = await prisma.$transaction(async (tx) => {
       // Cast jsonb to text so Prisma $queryRaw can deserialize it (avoids 'void' type error)
-      const rows = await tx.$queryRaw`SELECT state_meta::text as state_meta FROM "GameRoom" WHERE room_code = ${roomCode} FOR UPDATE`;
+      const rows =
+        await tx.$queryRaw`SELECT state_meta::text as state_meta FROM "GameRoom" WHERE room_code = ${roomCode} FOR UPDATE`;
       if (!rows || rows.length === 0) return null;
       // state_meta is now always a string (cast above) or null
       const currentRaw = rows[0].state_meta || "{}";
-      const current = typeof currentRaw === "string" ? JSON.parse(currentRaw) : currentRaw;
+      const current =
+        typeof currentRaw === "string" ? JSON.parse(currentRaw) : currentRaw;
 
       // If we expect a specific prior state and it changed, fail
-      if (expectedCurrent !== null && JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+      if (
+        expectedCurrent !== null &&
+        JSON.stringify(current) !== JSON.stringify(expectedCurrent)
+      ) {
         return null;
       }
 
@@ -144,11 +149,13 @@ async function acquireHitmanLock(roomCode) {
   try {
     const result = await prisma.$transaction(async (tx) => {
       // Cast jsonb to text so Prisma $queryRaw can deserialize it (avoids 'void' type error)
-      const rows = await tx.$queryRaw`SELECT state_meta::text as state_meta FROM "GameRoom" WHERE room_code = ${roomCode} FOR UPDATE`;
+      const rows =
+        await tx.$queryRaw`SELECT state_meta::text as state_meta FROM "GameRoom" WHERE room_code = ${roomCode} FOR UPDATE`;
       if (!rows || rows.length === 0) return null;
       // state_meta is now always a string (cast above) or null
       const currentRaw = rows[0].state_meta || "{}";
-      const current = typeof currentRaw === "string" ? JSON.parse(currentRaw) : currentRaw;
+      const current =
+        typeof currentRaw === "string" ? JSON.parse(currentRaw) : currentRaw;
 
       // Don't acquire if already resolved or someone else resolving
       if (current.hitman_resolved || current.hitman_resolving) return null;
@@ -284,9 +291,19 @@ async function resolveHitmanEarly(room) {
 
   // Fetch hitman vote only after we have ensured a lock (or someone else already set resolving)
   const hitmanVote = await getHitmanTarget(room_code, round);
-  if (!hitmanVote || !hitmanVote.targets || hitmanVote.targets.length !== 2 || !hitmanVote.roles || hitmanVote.roles.length !== 2) {
+  if (
+    !hitmanVote ||
+    !hitmanVote.targets ||
+    hitmanVote.targets.length !== 2 ||
+    !hitmanVote.roles ||
+    hitmanVote.roles.length !== 2
+  ) {
     // No action to resolve; mark resolved and clear resolving flag so future ticks continue normally
-    await setMetaAtomic(room_code, { hitman_resolved: true, hitman_resolving: false, early_deaths: [] });
+    await setMetaAtomic(room_code, {
+      hitman_resolved: true,
+      hitman_resolving: false,
+      early_deaths: [],
+    });
     return;
   }
 
@@ -307,8 +324,14 @@ async function resolveHitmanEarly(room) {
   ];
 
   // Reject duplicate resolved players (id vs user_id mismatch)
-  if (resolvedTargets[0] && resolvedTargets[1] && resolvedTargets[0].id === resolvedTargets[1].id) {
-    console.warn(`[hitman] Duplicate resolved targets (same player) for room ${room_code}`);
+  if (
+    resolvedTargets[0] &&
+    resolvedTargets[1] &&
+    resolvedTargets[0].id === resolvedTargets[1].id
+  ) {
+    console.warn(
+      `[hitman] Duplicate resolved targets (same player) for room ${room_code}`,
+    );
     // Clear resolving flag so future ticks can try again gracefully
     await setMetaAtomic(room_code, { hitman_resolving: false });
     return;
@@ -352,7 +375,7 @@ async function resolveHitmanEarly(room) {
   // FIX: Enforce BOTH guesses must be correct (exactly 2 kills required)
   // If meeting mafia, cancel ALL kills (atomic behavior)
   let earlyDeaths = [];
-  
+
   if (!meetsMafia && candidateKills.length === 2) {
     // FIX: Apply both kills atomically only if BOTH guesses correct
     // Verify targets still ALIVE before killing
@@ -479,17 +502,21 @@ async function resolveNightEnd(room) {
 
   // ── 3. Mafia kill vs Doctor heal ──────────────────────────────────────────
   let mafiaKill = null;
-  
+
   // FIX: Use computed function to get all current death IDs (including hitman)
   const getCurrentDeadIds = () => new Set(allDeaths.map((d) => d.playerId));
-  
-  if (mafiaTargetId && !safeIds.has(mafiaTargetId) && !getCurrentDeadIds().has(mafiaTargetId)) {
+
+  if (
+    mafiaTargetId &&
+    !safeIds.has(mafiaTargetId) &&
+    !getCurrentDeadIds().has(mafiaTargetId)
+  ) {
     // FIX: Verify target still ALIVE (ERROR 6: not stale from after hitman kills)
     const targetStillAlive = await prisma.gamePlayer.findUnique({
       where: { id: mafiaTargetId },
       select: { status: true },
     });
-    
+
     if (targetStillAlive?.status === "ALIVE") {
       // Target is not protected and not already dead from hitman
       await prisma.gamePlayer.update({
@@ -508,7 +535,11 @@ async function resolveNightEnd(room) {
   }
 
   // Check if VIP was killed by mafia
-  if (bountyVipId && !bountyKillUnlocked && mafiaKill?.playerId === bountyVipId) {
+  if (
+    bountyVipId &&
+    !bountyKillUnlocked &&
+    mafiaKill?.playerId === bountyVipId
+  ) {
     bountyKillUnlocked = true;
   }
 
@@ -516,10 +547,10 @@ async function resolveNightEnd(room) {
   let bountyKill = null;
   if (bountyKillUnlocked) {
     const bountyTargetId = await getBountyHunterShot(room_code, round);
-    
+
     // FIX: Use computed dead IDs that includes both hitman AND mafia kills
     const allDeadIds = getCurrentDeadIds();
-    
+
     if (bountyTargetId && !allDeadIds.has(bountyTargetId)) {
       const bountyTarget = playerById.get(bountyTargetId);
       // BH kill pierces Doctor heal but NOT Nurse+Doc combo
@@ -557,9 +588,9 @@ async function resolveNightEnd(room) {
     if (exposedPlayer) {
       // Find the reporter player
       const reporterPlayer = alivePlayers.find((p) => p.role === "REPORTER");
-      const reporterSurvived = reporterPlayer && !allDeaths.some(
-        (d) => d.playerId === reporterPlayer.id
-      );
+      const reporterSurvived =
+        reporterPlayer &&
+        !allDeaths.some((d) => d.playerId === reporterPlayer.id);
       reporterResult = {
         targetId: reporterExposeId,
         targetUserId: exposedPlayer.user_id,
@@ -595,7 +626,11 @@ async function resolveNightEnd(room) {
   // ── 7. Win condition ──────────────────────────────────────────────────────
   const winner = await checkWinCondition(room_code);
   if (winner) {
-    await endGame(room_code, winner);
+    await endGame(
+      room_code,
+      winner,
+      winner === "CITIZENS" ? "MAFIA_ELIMINATED" : null,
+    );
     return;
   }
 
@@ -603,13 +638,13 @@ async function resolveNightEnd(room) {
   // Check Prophet Day 4 win
   const prophetWin = await checkProphetWin(room_code, round);
   if (prophetWin) {
-    await endGame(room_code, prophetWin);
+    await endGame(room_code, prophetWin, "PROPHET_WIN");
     return;
   }
 
   const discussionStartAt = new Date();
   const discussionEndsAt = new Date(
-    discussionStartAt.getTime() + PHASE_DURATION.DISCUSSION
+    discussionStartAt.getTime() + PHASE_DURATION.DISCUSSION,
   );
 
   await setMeta(room_code, {
@@ -712,7 +747,15 @@ async function resolveVoting(room) {
       eliminatedPlayerUserId: eliminatedUserId,
       phaseEndsAt: phaseEndsAt.toISOString(),
     });
-    setTimeout(() => endGame(room_code, winner), PHASE_DURATION.REVEAL);
+    setTimeout(
+      () =>
+        endGame(
+          room_code,
+          winner,
+          winner === "CITIZENS" ? "MAFIA_ELIMINATED" : null,
+        ),
+      PHASE_DURATION.REVEAL,
+    );
     return;
   }
 
@@ -731,7 +774,7 @@ async function resolveVoting(room) {
     });
     setTimeout(
       () => advanceToNight(room_code, round + 1),
-      PHASE_DURATION.REVEAL
+      PHASE_DURATION.REVEAL,
     );
   } else {
     await advanceToNight(room_code, round + 1);
@@ -778,7 +821,7 @@ async function advanceToNight(roomCode, nextRound) {
   });
 }
 
-async function endGame(roomCode, winner) {
+async function endGame(roomCode, winner, reason = null) {
   const allPlayers = await prisma.gamePlayer.findMany({
     where: { room_code: roomCode },
     include: { user: { select: { full_name: true } } },
@@ -799,7 +842,7 @@ async function endGame(roomCode, winner) {
     `;
     const currentExperience = Math.max(
       0,
-      Number(expRows?.[0]?.experience ?? BASE_EXPERIENCE)
+      Number(expRows?.[0]?.experience ?? BASE_EXPERIENCE),
     );
     const didWin = isWinningSideForRating(p.role, winner);
     const delta = didWin
@@ -820,7 +863,7 @@ async function endGame(roomCode, winner) {
           SET experience = ${nextExperience},
               experience_updated_at = NOW()
           WHERE user_id = ${p.user_id}::uuid
-        `
+        `,
       );
     }
   }
@@ -836,6 +879,7 @@ async function endGame(roomCode, winner) {
 
   await pusher.trigger(`game-${roomCode}`, "game-ended", {
     winner,
+    winReason: reason,
     players: allPlayers.map((p) => ({
       userId: p.user_id,
       name: p.user.full_name,
@@ -845,6 +889,19 @@ async function endGame(roomCode, winner) {
       experience: ratingByUserId.get(p.user_id)?.next ?? BASE_EXPERIENCE,
     })),
   });
+
+  // ── Dev-mode cleanup ────────────────────────────────────────────────────────
+  // Fire-and-forget: give clients ~1 s to receive the Pusher event before
+  // the room and all bot User records are wiped from the database.
+  if (allPlayers.some((p) => p.isBot)) {
+    setTimeout(
+      () =>
+        cleanupDevRoom(roomCode).catch((err) =>
+          console.error("[devCleanup]", err),
+        ),
+      1000,
+    );
+  }
 }
 
 // ─── HEARTBEAT DISPATCHER ─────────────────────────────────────────────────────
@@ -884,7 +941,7 @@ export async function resolveExpiredRooms() {
           select: { state_meta: true, room_code: true, round: true },
         });
         const freshMeta = getMeta(freshRoom);
-        
+
         // Only execute if not already resolved AND not currently resolving
         if (!freshMeta.hitman_resolved && !freshMeta.hitman_resolving) {
           // Attempt to set resolving flag atomically using the proper room identifier
@@ -914,10 +971,12 @@ export async function resolveExpiredRooms() {
 
         if (!freshMeta.night_resolved && freshRoom.phase_ends_at !== null) {
           // Lock by clearing phase_ends_at atomically
-          const lockResult = await prisma.gameRoom.update({
-            where: { room_code: room.room_code },
-            data: { phase_ends_at: null },
-          }).catch(() => null);
+          const lockResult = await prisma.gameRoom
+            .update({
+              where: { room_code: room.room_code },
+              data: { phase_ends_at: null },
+            })
+            .catch(() => null);
 
           // Only proceed if we successfully obtained the lock
           if (lockResult) {
@@ -935,7 +994,7 @@ export async function resolveExpiredRooms() {
     } catch (err) {
       console.error(
         `[heartbeat] Failed to resolve NIGHT room ${room.room_code}:`,
-        err.message
+        err.message,
       );
     }
   }
@@ -968,7 +1027,7 @@ export async function resolveExpiredRooms() {
     } catch (err) {
       console.error(
         `[heartbeat] Failed to resolve room ${room.room_code}:`,
-        err.message
+        err.message,
       );
     }
   }
