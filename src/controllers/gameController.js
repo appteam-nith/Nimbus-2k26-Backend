@@ -560,9 +560,15 @@ export const handleVote = async (req, res) => {
     }
 
     // ── Broadcast vote-updated with tally (for DAY_LYNCH) ────────────────────
+    const normalizedTargetId =
+      typeof target_id === "string" && target_id.trim().length > 0
+        ? target_id.trim()
+        : null;
     const broadcastPayload = {
       voterId,
       voteType: vote_type,
+      targetId: normalizedTargetId,
+      isSkip: normalizedTargetId == null,
     };
 
     // Include vote tally for DAY_LYNCH so clients can show live vote counts
@@ -875,11 +881,11 @@ export const handleChat = async (req, res) => {
       }
       targetChannel = `private-citizen-${room_code}`;
     } else {
-      // Global chat — DISCUSSION only
-      if (room.status !== "DISCUSSION") {
+      // Global chat — DISCUSSION and LOBBY
+      if (room.status !== "DISCUSSION" && room.status !== "LOBBY") {
         return res
           .status(409)
-          .json({ error: "Chat is only allowed during DISCUSSION phase" });
+          .json({ error: "Chat is only allowed during DISCUSSION or LOBBY phase" });
       }
     }
 
