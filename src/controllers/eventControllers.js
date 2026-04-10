@@ -54,7 +54,14 @@ export const getEventsByClub = async (req, res) => {
 // Get all Events (sab clubs ke)
 export const getAllEvents = async (req, res) => {
   try {
+    // Keep events that are upcoming OR currently live (started within last 60 min).
+    const now = new Date();
+    const liveWindowStart = new Date(now.getTime() - 60 * 60 * 1000);
+
     const events = await prisma.event.findMany({
+      where: {
+        event_time: { gte: liveWindowStart },
+      },
       orderBy: { event_time: "asc" },
       include: {
         club: {

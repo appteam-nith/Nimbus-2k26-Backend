@@ -747,15 +747,6 @@ async function resolveVoting(room) {
       eliminatedPlayerUserId: eliminatedUserId,
       phaseEndsAt: phaseEndsAt.toISOString(),
     });
-    setTimeout(
-      () =>
-        endGame(
-          room_code,
-          winner,
-          winner === "CITIZENS" ? "MAFIA_ELIMINATED" : null,
-        ),
-      PHASE_DURATION.REVEAL,
-    );
     return;
   }
 
@@ -772,13 +763,26 @@ async function resolveVoting(room) {
       eliminatedPlayerUserId: eliminatedUserId,
       phaseEndsAt: phaseEndsAt.toISOString(),
     });
-    setTimeout(
-      () => advanceToNight(room_code, round + 1),
-      PHASE_DURATION.REVEAL,
-    );
   } else {
     await advanceToNight(room_code, round + 1);
   }
+}
+
+async function resolveReveal(room) {
+  const { room_code, round } = room;
+
+  // Re-check at reveal end so phase progression survives process restarts.
+  const winner = await checkWinCondition(room_code);
+  if (winner) {
+    await endGame(
+      room_code,
+      winner,
+      winner === "CITIZENS" ? "MAFIA_ELIMINATED" : null,
+    );
+    return;
+  }
+
+  await advanceToNight(room_code, round + 1);
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -1002,7 +1006,7 @@ export async function resolveExpiredRooms() {
   // ── Handle DISCUSSION and VOTING rooms (unchanged) ────────────────────────
   const otherExpired = await prisma.gameRoom.findMany({
     where: {
-      status: { in: ["DISCUSSION", "VOTING"] },
+      status: { in: ["DISCUSSION", "VOTING", "REVEAL"] },
       phase_ends_at: { lte: now },
     },
   });
@@ -1023,6 +1027,7 @@ export async function resolveExpiredRooms() {
 
         if (room.status === "DISCUSSION") await resolveDiscussion(room);
         else if (room.status === "VOTING") await resolveVoting(room);
+        else if (room.status === "REVEAL") await resolveReveal(room);
       }
     } catch (err) {
       console.error(
