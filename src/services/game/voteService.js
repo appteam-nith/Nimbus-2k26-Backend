@@ -289,18 +289,6 @@ export async function submitVote({
             id: { not: existing.id },
           },
         });
-
-        if (voteType === "REPORTER_EXPOSE") {
-          await tx.gameRoom.update({
-            where: { room_code: roomCode },
-            data: {
-              state_meta: {
-                ...roomMeta,
-                reporter_used: true,
-              },
-            },
-          });
-        }
         return;
       }
 
@@ -314,18 +302,6 @@ export async function submitVote({
           target_meta: normalizedTargetMeta,
         },
       });
-
-      if (voteType === "REPORTER_EXPOSE") {
-        await tx.gameRoom.update({
-          where: { room_code: roomCode },
-          data: {
-            state_meta: {
-              ...roomMeta,
-              reporter_used: true,
-            },
-          },
-        });
-      }
     });
 
     return;
