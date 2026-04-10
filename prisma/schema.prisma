@@ -231,3 +231,33 @@ model GameVote {
   @@index([voter_id])
   @@index([target_id])
 }
+
+//////////////////////
+// COMMUNITY CHAT
+//////////////////////
+
+model CommunityRoom {
+  id            String   @id @default(uuid())
+  name          String   @unique
+  isPublic      Boolean  @default(false)
+  isLocked      Boolean  @default(false)
+  password      String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+
+  messages      CommunityMessage[]
+}
+
+model CommunityMessage {
+  id             String   @id @default(uuid())
+  roomName       String
+  senderNickname String
+  text           String
+  isSystem       Boolean  @default(false)
+  sentAt         DateTime @default(now())
+
+  room           CommunityRoom @relation(fields: [roomName], references: [name], onDelete: Cascade)
+
+  @@index([roomName])
+}
