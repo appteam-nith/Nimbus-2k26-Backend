@@ -1,5 +1,4 @@
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config.js";
 
 import express from "express";
 import cors from "cors";
@@ -12,6 +11,7 @@ import pusher from "./config/pusher.js";
 import clubRoutes from "./routes/clubsRoute.js";
 import eventRoute from "./routes/eventRoute.js";
 import projectRoute from "./routes/projectRoute.js";
+import CommunityChatRoutes from "./routes/communityChatRoute.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -164,6 +164,7 @@ app.use("/api/projects", projectRoute);
 app.use("/api/users", UserRoutes);
 app.use("/api/coreteam", CoreTeamRoutes);
 app.use("/api/game", GameRoutes);
+app.use("/api/community-chat", CommunityChatRoutes);
 
 app.get("/api/config/update", (req, res) => {
   res.json({

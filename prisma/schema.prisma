@@ -231,3 +231,53 @@ model GameVote {
   @@index([voter_id])
   @@index([target_id])
 }
+
+//////////////////////
+// COMMUNITY CHAT
+//////////////////////
+
+model CommunityRoom {
+  id            String   @id @default(uuid())
+  name          String   @unique
+  isLocked      Boolean  @default(false)
+  password      String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+
+  messages      CommunityMessage[]
+  members       CommunityRoomMember[]
+}
+
+model CommunityMessage {
+  id             String   @id @default(uuid())
+  roomName       String
+  senderNickname String
+  text           String
+  isSystem       Boolean  @default(false)
+  sentAt         DateTime @default(now())
+
+  room           CommunityRoom @relation(fields: [roomName], references: [name], onDelete: Cascade)
+
+  @@index([roomName])
+}
+
+model CommunityRoomMember {
+  id       String   @id @default(uuid())
+  roomName String
+  nickname String
+  joinedAt DateTime @default(now())
+
+  room     CommunityRoom @relation(fields: [roomName], references: [name], onDelete: Cascade)
+
+  @@unique([roomName, nickname])
+  @@index([roomName])
+}
+
+model PublicChatMessage {
+  id             String   @id @default(uuid())
+  senderNickname String
+  text           String
+  isSystem       Boolean  @default(false)
+  sentAt         DateTime @default(now())
+}
