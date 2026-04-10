@@ -244,6 +244,7 @@ model CommunityRoom {
   password      String?
   createdById   String
   createdByName String
+  activeCount   Int      @default(0)
   createdAt     DateTime @default(now())
 
   messages      CommunityMessage[]

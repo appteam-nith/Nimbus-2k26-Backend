@@ -200,8 +200,11 @@ export const joinRoom = async (req, res) => {
     });
     if (!room) return res.status(404).json({ error: "Room not found" });
     
-    // We don't maintain a permanent presence record in the DB for community chat out of simplicity, 
-    // but we can send a system notification
+    await prisma.communityRoom.update({
+      where: { id: room.id },
+      data: { activeCount: { increment: 1 } }
+    });
+
     const msg = await prisma.communityMessage.create({
       data: {
         roomName: room.name,
@@ -230,6 +233,7 @@ export const leaveRoom = async (req, res) => {
     });
     if (!room) return res.status(404).json({ error: "Room not found" });
 
+    // Broadcast leave message first
     const msg = await prisma.communityMessage.create({
       data: {
         roomName: room.name,
@@ -238,9 +242,23 @@ export const leaveRoom = async (req, res) => {
         isSystem: true
       }
     });
-
     await pusher.trigger(`community-${room.id}`, "chat-message", msg);
-    res.status(200).json({ message: "Left successfully" });
+
+    const newCount = Math.max(0, room.activeCount - 1);
+
+    if (!room.isPublic && newCount <= 0) {
+      // Destroy empty custom room
+      await prisma.communityRoom.delete({ where: { id: room.id } });
+      const { password: _, ...roomSafe } = room;
+      await pusher.trigger("community-global", "room-deleted", roomSafe);
+      return res.status(200).json({ message: "Left and room destroyed" });
+    } else {
+      await prisma.communityRoom.update({
+        where: { id: room.id },
+        data: { activeCount: newCount }
+      });
+      return res.status(200).json({ message: "Left successfully" });
+    }
   } catch (err) {
     console.error("[leaveRoom]", err.message);
     res.status(500).json({ error: err.message });
