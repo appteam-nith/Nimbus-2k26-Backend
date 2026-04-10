@@ -881,11 +881,11 @@ export const handleChat = async (req, res) => {
       }
       targetChannel = `private-citizen-${room_code}`;
     } else {
-      // Global chat — DISCUSSION only
-      if (room.status !== "DISCUSSION") {
+      // Global chat — DISCUSSION and LOBBY
+      if (room.status !== "DISCUSSION" && room.status !== "LOBBY") {
         return res
           .status(409)
-          .json({ error: "Chat is only allowed during DISCUSSION phase" });
+          .json({ error: "Chat is only allowed during DISCUSSION or LOBBY phase" });
       }
     }
 
