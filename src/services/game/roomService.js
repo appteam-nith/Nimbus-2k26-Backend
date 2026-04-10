@@ -1,4 +1,5 @@
 import prisma from "../../config/prisma.js";
+import { getDoctorSave, getMafiaTarget } from "./voteService.js";
 
 // ─── BOT / DEV-MODE HELPERS ───────────────────────────────────────────────────
 
@@ -161,6 +162,14 @@ export async function getRoomState(roomCode, myUserId) {
   const bountyVipPlayer = room.players.find(
     (p) => p.id === roomMeta.bounty_vip_player_id,
   );
+  let mafiaTargetUserId = null;
+  let doctorSaveUserId = null;
+  if (room.status === "NIGHT") {
+    [mafiaTargetUserId, doctorSaveUserId] = await Promise.all([
+      getMafiaTarget(room.room_code, room.round),
+      getDoctorSave(room.room_code, room.round),
+    ]);
+  }
 
   return {
     roomCode: room.room_code,
@@ -179,6 +188,8 @@ export async function getRoomState(roomCode, myUserId) {
     reporterUsed: roomMeta.reporter_used === true,
     hitmanMetMafia: roomMeta.hitman_met_mafia === true,
     bountyVipUserId: bountyVipPlayer?.user_id || null,
+    mafiaTargetUserId,
+    doctorSaveUserId,
     myDayTimeAdjustment,
     dayTimeDeltaSeconds,
     devMode: isDevMode,

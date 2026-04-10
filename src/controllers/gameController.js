@@ -560,9 +560,15 @@ export const handleVote = async (req, res) => {
     }
 
     // ── Broadcast vote-updated with tally (for DAY_LYNCH) ────────────────────
+    const normalizedTargetId =
+      typeof target_id === "string" && target_id.trim().length > 0
+        ? target_id.trim()
+        : null;
     const broadcastPayload = {
       voterId,
       voteType: vote_type,
+      targetId: normalizedTargetId,
+      isSkip: normalizedTargetId == null,
     };
 
     // Include vote tally for DAY_LYNCH so clients can show live vote counts
