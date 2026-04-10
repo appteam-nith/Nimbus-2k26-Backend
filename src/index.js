@@ -167,8 +167,8 @@ app.use("/api/game", GameRoutes);
 
 app.get("/api/config/update", (req, res) => {
   res.json({
-    requiredVersionCode: process.env.REQUIRED_VERSION_CODE ? parseInt(process.env.REQUIRED_VERSION_CODE) : 7,
-    playStoreUrl: process.env.PLAYSTORE_URL || "https://play.google.com/store/apps/details?id=com.nith.nimbus2k26"
+    requiredVersionCode: process.env.REQUIRED_VERSION_CODE ? parseInt(process.env.REQUIRED_VERSION_CODE) : 8,
+    playStoreUrl: process.env.PLAYSTORE_URL || "https://nimbus-2k26-7823c.web.app"
   });
 });
 
