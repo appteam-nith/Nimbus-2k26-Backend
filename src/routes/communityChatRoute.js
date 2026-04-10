@@ -7,7 +7,9 @@ import {
   getMessages,
   sendMessage,
   joinRoom,
-  leaveRoom
+  leaveRoom,
+  getPublicMessages,
+  sendPublicMessage
 } from "../controllers/communityChatController.js";
 
 const router = express.Router();
@@ -20,5 +22,8 @@ router.post("/rooms/:name/join", joinRoom);
 router.post("/rooms/:name/leave", leaveRoom);
 router.get("/rooms/:name/messages", getMessages);
 router.post("/rooms/:name/messages", sendMessage);
+
+router.get("/public/messages", getPublicMessages);
+router.post("/public/messages", sendPublicMessage);
 
 export default router;
