@@ -1,37 +1,19 @@
 import prisma from "../config/prisma.js";
 import pusher from "../config/pusher.js";
 
-// Fetch all rooms (sorted: public first, then newest first)
+// Fetch all rooms (sorted newest first)
 export const getRooms = async (req, res) => {
   try {
     const rooms = await prisma.communityRoom.findMany({
       orderBy: [
-        { isPublic: "desc" },
         { createdAt: "desc" },
       ],
       include: {
         _count: {
-          select: { messages: true }
+          select: { messages: true, members: true }
         }
       }
     });
-    
-    // Check if public room exists, if not create one via seed locally
-    let hasPublic = rooms.some(r => r.name === "Public Chat");
-    if (!hasPublic) {
-      const publicRoom = await prisma.communityRoom.upsert({
-        where: { name: "Public Chat" },
-        update: {},
-        create: {
-          name: "Public Chat",
-          isPublic: true,
-          isLocked: false,
-          createdById: "system",
-          createdByName: "System",
-        }
-      });
-      rooms.unshift(publicRoom);
-    }
 
     // Don't send passwords back
     const formattedRooms = rooms.map(room => {
@@ -71,7 +53,6 @@ export const createRoom = async (req, res) => {
     const room = await prisma.communityRoom.create({
       data: {
         name: trimmedName,
-        isPublic: false,
         isLocked: !!isLocked,
         password: isLocked ? password.trim() : null,
         createdById,
@@ -112,7 +93,7 @@ export const verifyPassword = async (req, res) => {
     });
 
     if (!room) return res.status(404).json({ error: "Room not found" });
-    if (!room.isLocked || room.isPublic) return res.status(200).json({ verified: true });
+    if (!room.isLocked) return res.status(200).json({ verified: true });
     
     if (room.password === password) {
       return res.status(200).json({ verified: true });
@@ -136,7 +117,6 @@ export const updateLock = async (req, res) => {
     });
 
     if (!room) return res.status(404).json({ error: "Room not found" });
-    if (room.isPublic) return res.status(400).json({ error: "Public room cannot be locked." });
     if (room.createdById !== requesterUserId) {
       return res.status(403).json({ error: "Only the room creator can change room lock settings." });
     }
@@ -199,9 +179,17 @@ export const joinRoom = async (req, res) => {
       where: { name }
     });
     if (!room) return res.status(404).json({ error: "Room not found" });
-    
-    // We don't maintain a permanent presence record in the DB for community chat out of simplicity, 
-    // but we can send a system notification
+
+    try {
+      await prisma.communityRoomMember.upsert({
+        where: { roomName_nickname: { roomName: name, nickname } },
+        update: {},
+        create: { roomName: name, nickname }
+      });
+    } catch (e) {
+      // ignored
+    }
+
     const msg = await prisma.communityMessage.create({
       data: {
         roomName: room.name,
@@ -230,6 +218,7 @@ export const leaveRoom = async (req, res) => {
     });
     if (!room) return res.status(404).json({ error: "Room not found" });
 
+    // Broadcast leave message first
     const msg = await prisma.communityMessage.create({
       data: {
         roomName: room.name,
@@ -238,9 +227,25 @@ export const leaveRoom = async (req, res) => {
         isSystem: true
       }
     });
-
     await pusher.trigger(`community-${room.id}`, "chat-message", msg);
-    res.status(200).json({ message: "Left successfully" });
+
+    await prisma.communityRoomMember.deleteMany({
+      where: { roomName: name, nickname }
+    });
+
+    const remainingCount = await prisma.communityRoomMember.count({
+      where: { roomName: name }
+    });
+
+    if (remainingCount <= 0) {
+      // Destroy empty custom room
+      await prisma.communityRoom.delete({ where: { id: room.id } });
+      const { password: _, ...roomSafe } = room;
+      await pusher.trigger("community-global", "room-deleted", roomSafe);
+      return res.status(200).json({ message: "Left and room destroyed" });
+    } else {
+      return res.status(200).json({ message: "Left successfully" });
+    }
   } catch (err) {
     console.error("[leaveRoom]", err.message);
     res.status(500).json({ error: err.message });
@@ -258,7 +263,10 @@ export const getMessages = async (req, res) => {
     });
     
     // For joining the room, we need the room object's ID for pusher subscription
-    const room = await prisma.communityRoom.findUnique({ where: { name } });
+    const room = await prisma.communityRoom.findUnique({ 
+      where: { name },
+      include: { members: true }
+    });
     
     res.status(200).json({ messages, room });
   } catch (err) {
@@ -295,6 +303,41 @@ export const sendMessage = async (req, res) => {
     res.status(200).json({ message: msg });
   } catch (err) {
     console.error("[sendMessage]", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// PUBLIC CHAT
+export const getPublicMessages = async (req, res) => {
+  try {
+    const messages = await prisma.publicChatMessage.findMany({
+      orderBy: { sentAt: "asc" },
+      take: 200
+    });
+    res.status(200).json({ messages });
+  } catch (err) {
+    console.error("[getPublicMessages]", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const sendPublicMessage = async (req, res) => {
+  try {
+    const { senderNickname, text } = req.body;
+    if (!senderNickname?.trim() || !text?.trim()) {
+      return res.status(400).json({ error: "Nickname and text required" });
+    }
+    const msg = await prisma.publicChatMessage.create({
+      data: {
+        senderNickname: senderNickname.trim(),
+        text: text.trim(),
+        isSystem: false
+      }
+    });
+    await pusher.trigger('public-chat', 'chat-message', msg);
+    res.status(200).json({ message: msg });
+  } catch (err) {
+    console.error("[sendPublicMessage]", err.message);
     res.status(500).json({ error: err.message });
   }
 };
